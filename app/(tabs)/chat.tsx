@@ -135,7 +135,7 @@ export default function SocialHubScreen() {
                                 {messages.length === 0 && (
                                     <>
                                         <View style={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 self-start p-4 rounded-tr-3xl rounded-bl-3xl rounded-br-3xl mb-3 max-w-[80%] shadow-sm`}>
-                                            <Text style={tw`text-[#00C253] dark:text-[#00FF66] text-[10px] font-black uppercase mb-1 tracking-widest`}>Alex (Car 2)</Text>
+                                            <Text style={tw`text-[#00C253] dark:text-[#00FF66] text-[10px] font-black uppercase mb-1 tracking-widest`}>Safwans Car</Text>
                                             <Text style={tw`text-black dark:text-white text-base`}>Can we pull over at the next exit? Need to stretch.</Text>
                                         </View>
                                         <View style={tw`bg-[#FF6A00] self-end p-4 rounded-tl-3xl rounded-bl-3xl rounded-br-3xl mb-3 max-w-[80%] shadow-lg`}>
