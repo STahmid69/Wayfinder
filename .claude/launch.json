@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ledger-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "-p", "4321", "-s", ".claude/preview"],
+      "port": 4321
+    }
+  ]
+}

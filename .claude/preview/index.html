@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wayfinder Ledger</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #121212;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    padding: 16px 18px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #1f1f1f;
+  }
+  .topbar-left { display: flex; align-items: center; gap: 7px; }
+  .live-dot {
+    width: 7px; height: 7px;
+    background: #FF6A00; border-radius: 50%;
+    box-shadow: 0 0 6px #FF6A00;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; } 50% { opacity:0.4; }
+  }
+  .live-label { color: #FF6A00; font-size: 10px; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
+  .convoy-code { color: #3F3F46; font-size: 10px; font-weight: 700; letter-spacing: 2px; }
+  .members-badge {
+    background: #1C1C1E;
+    border: 1px solid #2a2a2a;
+    border-radius: 20px;
+    padding: 4px 10px;
+    color: #71717A;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  /* ── Page Header ── */
+  .page-header {
+    padding: 16px 18px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .page-title {
+    color: #fff;
+    font-size: 26px;
+    font-weight: 900;
+    letter-spacing: -1px;
+    text-transform: uppercase;
+  }
+  .add-btn {
+    background: #fff;
+    border: none;
+    border-radius: 50px;
+    padding: 9px 16px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+  }
+  .add-btn-text {
+    color: #000;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  /* ── Total Card ── */
+  .total-card {
+    margin: 0 14px 14px;
+    background: #1C1C1E;
+    border: 1px solid #272727;
+    border-radius: 22px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .total-card-bg {
+    position: absolute;
+    right: -16px; bottom: -16px;
+    font-size: 100px;
+    opacity: 0.04;
+    pointer-events: none;
+    line-height: 1;
+  }
+  .total-eyebrow {
+    color: #52525B;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+  .total-amount-row { display: flex; align-items: baseline; gap: 4px; }
+  .total-currency { color: #FF6A00; font-size: 18px; font-weight: 900; }
+  .total-number { color: #fff; font-size: 42px; font-weight: 900; letter-spacing: -2px; line-height: 1; }
+  .total-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .orange-badge {
+    background: rgba(255,106,0,0.12);
+    border: 1px solid rgba(255,106,0,0.25);
+    border-radius: 6px;
+    padding: 3px 8px;
+    color: #FF6A00;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .meta-dot { width: 3px; height: 3px; background: #2a2a2a; border-radius: 50%; }
+  .meta-label { color: #3F3F46; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+
+  .split-divider { height: 1px; background: #272727; margin: 12px 0; }
+  .split-row { display: flex; align-items: center; gap: 10px; }
+  .split-icon-wrap {
+    width: 30px; height: 30px;
+    background: rgba(255,106,0,0.1);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .split-label { color: #52525B; font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .split-sub { color: #3F3F46; font-size: 8px; font-weight: 700; }
+  .split-value { margin-left: auto; text-align: right; }
+  .split-amount { color: #fff; font-size: 16px; font-weight: 900; letter-spacing: -0.5px; }
+  .split-per { color: #52525B; font-size: 8px; font-weight: 700; margin-top: 1px; }
+
+  /* ── Category Filter ── */
+  .filter-row {
+    display: flex;
+    gap: 7px;
+    padding: 0 14px 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-chip {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border: 1px solid #272727;
+    background: transparent;
+    color: #52525B;
+    white-space: nowrap;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .filter-chip.active { background: #fff; color: #000; border-color: #fff; }
+
+  /* ── Section Label ── */
+  .section-label {
+    padding: 2px 14px 10px;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  /* ── Member Cards ── */
+  .member-scroll {
+    display: flex;
+    gap: 9px;
+    padding: 0 14px 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .member-scroll::-webkit-scrollbar { display: none; }
+  .member-card {
+    background: #1C1C1E;
+    border: 1px solid #272727;
+    border-radius: 16px;
+    padding: 13px 15px;
+    min-width: 100px;
+    flex-shrink: 0;
+  }
+  .member-card.me {
+    border-color: rgba(255,106,0,0.5);
+    background: rgba(255,106,0,0.06);
+  }
+  .member-avatar {
+    width: 30px; height: 30px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 900; color: #fff;
+    margin-bottom: 8px;
+  }
+  .member-name { color: #fff; font-size: 11px; font-weight: 800; margin-bottom: 3px; }
+  .member-amount { color: #FF6A00; font-size: 15px; font-weight: 900; letter-spacing: -0.5px; }
+  .member-count { color: #3F3F46; font-size: 8px; font-weight: 700; letter-spacing: 1px; margin-top: 2px; }
+
+  /* ── History Header ── */
+  .history-header {
+    padding: 4px 14px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .history-title { color: #fff; font-size: 10px; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; }
+  .sort-btn {
+    background: #1C1C1E;
+    border: 1px solid #272727;
+    border-radius: 20px;
+    padding: 4px 12px;
+    color: #52525B;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+
+  /* ── Entry Cards ── */
+  .entries { padding: 0 14px 100px; display: flex; flex-direction: column; gap: 9px; }
+
+  .entry-card {
+    background: #1C1C1E;
+    border: 1px solid #272727;
+    border-radius: 16px;
+    padding: 13px 14px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+  .entry-icon {
+    width: 42px; height: 42px;
+    border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .entry-body { flex: 1; min-width: 0; }
+  .entry-desc {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .entry-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .cat-tag {
+    font-size: 7px; font-weight: 900; letter-spacing: 1.5px;
+    text-transform: uppercase; padding: 2px 6px; border-radius: 5px;
+  }
+  .entry-user { color: #52525B; font-size: 9px; font-weight: 700; }
+  .entry-time { color: #3F3F46; font-size: 9px; font-weight: 700; }
+
+  .entry-right { text-align: right; flex-shrink: 0; }
+  .entry-amount { color: #FF6A00; font-size: 16px; font-weight: 900; letter-spacing: -0.5px; white-space: nowrap; }
+  .entry-split { color: #3F3F46; font-size: 8px; font-weight: 700; margin-top: 3px; white-space: nowrap; }
+
+  /* ── Bottom Nav ── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    background: rgba(28,28,30,0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid #272727;
+    padding: 10px 0 24px;
+  }
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    opacity: 0.3;
+    cursor: pointer;
+  }
+  .nav-item.active { opacity: 1; }
+  .nav-icon { font-size: 22px; }
+  .nav-label {
+    color: #71717A;
+    font-size: 8px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .nav-item.active .nav-label { color: #FF6A00; }
+</style>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="live-dot"></div>
+      <span class="live-label">Live</span>
+      <span class="convoy-code">· WF-4829</span>
+    </div>
+    <div class="members-badge">4 Members</div>
+  </div>
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <span class="page-title">Ledger</span>
+    <button class="add-btn">
+      <span style="font-size:16px;line-height:1;color:#000;">+</span>
+      <span class="add-btn-text">Add</span>
+    </button>
+  </div>
+
+  <!-- Total Card -->
+  <div class="total-card">
+    <div class="total-card-bg">💳</div>
+    <div class="total-eyebrow">Total Expenses</div>
+    <div class="total-amount-row">
+      <span class="total-currency">RM</span>
+      <span class="total-number">247.50</span>
+    </div>
+    <div class="total-meta">
+      <div class="orange-badge">8 Entries</div>
+      <div class="meta-dot"></div>
+      <span class="meta-label">Shared live</span>
+    </div>
+    <div class="split-divider"></div>
+    <div class="split-row">
+      <div class="split-icon-wrap">÷</div>
+      <div>
+        <div class="split-label">Split per head</div>
+        <div class="split-sub">4 members</div>
+      </div>
+      <div class="split-value">
+        <div class="split-amount">RM 61.88</div>
+        <div class="split-per">per person</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Filter -->
+  <div class="filter-row">
+    <button class="filter-chip active">All</button>
+    <button class="filter-chip">⛽ Gas</button>
+    <button class="filter-chip">🛣️ Toll</button>
+    <button class="filter-chip">🍔 Food</button>
+    <button class="filter-chip">📦 Other</button>
+  </div>
+
+  <!-- By Member -->
+  <div class="section-label">By Member</div>
+  <div class="member-scroll">
+    <div class="member-card me">
+      <div class="member-avatar" style="background:#FF6A00;">S</div>
+      <div class="member-name">Shabab</div>
+      <div class="member-amount">RM 98.00</div>
+      <div class="member-count">3 entries</div>
+    </div>
+    <div class="member-card">
+      <div class="member-avatar" style="background:#3B82F6;">A</div>
+      <div class="member-name">Ahmed</div>
+      <div class="member-amount">RM 72.50</div>
+      <div class="member-count">2 entries</div>
+    </div>
+    <div class="member-card">
+      <div class="member-avatar" style="background:#10B981;">R</div>
+      <div class="member-name">Rafi</div>
+      <div class="member-amount">RM 55.00</div>
+      <div class="member-count">2 entries</div>
+    </div>
+    <div class="member-card">
+      <div class="member-avatar" style="background:#8B5CF6;">Z</div>
+      <div class="member-name">Zayn</div>
+      <div class="member-amount">RM 22.00</div>
+      <div class="member-count">1 entry</div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="history-header">
+    <span class="history-title">History</span>
+    <button class="sort-btn">↓ Newest</button>
+  </div>
+
+  <div class="entries">
+
+    <div class="entry-card">
+      <div class="entry-icon" style="background:rgba(255,106,0,0.1);">⛽</div>
+      <div class="entry-body">
+        <div class="entry-desc">Shell Petronas R&R</div>
+        <div class="entry-meta">
+          <span class="cat-tag" style="background:rgba(255,106,0,0.12);color:#FF6A00;">Gas</span>
+          <span class="entry-user">Shabab</span>
+          <span class="entry-time">· 2:14 PM</span>
+        </div>
+      </div>
+      <div class="entry-right">
+        <div class="entry-amount">RM 65.00</div>
+        <div class="entry-split">RM 16.25 / head</div>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <div class="entry-icon" style="background:rgba(59,130,246,0.1);">🛣️</div>
+      <div class="entry-body">
+        <div class="entry-desc">Plus Highway Toll</div>
+        <div class="entry-meta">
+          <span class="cat-tag" style="background:rgba(59,130,246,0.12);color:#3B82F6;">Toll</span>
+          <span class="entry-user">Ahmed</span>
+          <span class="entry-time">· 1:45 PM</span>
+        </div>
+      </div>
+      <div class="entry-right">
+        <div class="entry-amount">RM 42.50</div>
+        <div class="entry-split">RM 10.63 / head</div>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <div class="entry-icon" style="background:rgba(16,185,129,0.1);">🍔</div>
+      <div class="entry-body">
+        <div class="entry-desc">McDonald's Drive-Thru</div>
+        <div class="entry-meta">
+          <span class="cat-tag" style="background:rgba(16,185,129,0.12);color:#10B981;">Food</span>
+          <span class="entry-user">Rafi</span>
+          <span class="entry-time">· 12:30 PM</span>
+        </div>
+      </div>
+      <div class="entry-right">
+        <div class="entry-amount">RM 55.00</div>
+        <div class="entry-split">RM 13.75 / head</div>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <div class="entry-icon" style="background:rgba(139,92,246,0.1);">📦</div>
+      <div class="entry-body">
+        <div class="entry-desc">Ice & Drinks</div>
+        <div class="entry-meta">
+          <span class="cat-tag" style="background:rgba(139,92,246,0.12);color:#8B5CF6;">Other</span>
+          <span class="entry-user">Zayn</span>
+          <span class="entry-time">· 11:00 AM</span>
+        </div>
+      </div>
+      <div class="entry-right">
+        <div class="entry-amount">RM 22.00</div>
+        <div class="entry-split">RM 5.50 / head</div>
+      </div>
+    </div>
+
+    <div class="entry-card">
+      <div class="entry-icon" style="background:rgba(255,106,0,0.1);">⛽</div>
+      <div class="entry-body">
+        <div class="entry-desc">BHP Station KL</div>
+        <div class="entry-meta">
+          <span class="cat-tag" style="background:rgba(255,106,0,0.12);color:#FF6A00;">Gas</span>
+          <span class="entry-user">Shabab</span>
+          <span class="entry-time">· 9:15 AM</span>
+        </div>
+      </div>
+      <div class="entry-right">
+        <div class="entry-amount">RM 33.00</div>
+        <div class="entry-split">RM 8.25 / head</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom Nav -->
+  <div class="bottom-nav">
+    <div class="nav-item">
+      <span class="nav-icon">🗺️</span>
+      <span class="nav-label">Map</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">💬</span>
+      <span class="nav-label">Chat</span>
+    </div>
+    <div class="nav-item active">
+      <span class="nav-icon">📒</span>
+      <span class="nav-label" style="color:#FF6A00;">Ledger</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-icon">🗳️</span>
+      <span class="nav-label">Votes</span>
+    </div>
+  </div>
+
+</body>
+</html>

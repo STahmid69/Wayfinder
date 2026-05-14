@@ -9,7 +9,6 @@ export default function VoiceEngine() {
     const localAudioTrackRef = useRef<any>(null);
     const agoraRef = useRef<any>(null);
     const joinedRef = useRef(false);
-    const isPublishingRef = useRef(false);
 
     useEffect(() => {
         if (!convoyId || !APP_ID) return;
@@ -33,11 +32,17 @@ export default function VoiceEngine() {
                     user.audioTrack?.stop();
                 });
 
-                client.enableAudioVolumeIndicator();
-
                 await client.join(APP_ID, convoyId, null, myId);
                 joinedRef.current = true;
                 console.log('[VoiceEngine] Joined Agora channel:', convoyId);
+
+                // Pre-create mic track but keep it disabled (muted)
+                // This prevents the "3-second lag" or "unpublish crash"
+                const track = await AgoraRTC.createMicrophoneAudioTrack();
+                await track.setEnabled(false);
+                localAudioTrackRef.current = track;
+                await client.publish([track]);
+                console.log('[VoiceEngine] Mic track published (disabled)');
             } catch (err) {
                 console.error('[VoiceEngine] Init error:', err);
             }
@@ -47,6 +52,7 @@ export default function VoiceEngine() {
 
         return () => {
             joinedRef.current = false;
+            localAudioTrackRef.current?.stop();
             localAudioTrackRef.current?.close();
             clientRef.current?.leave();
             clientRef.current = null;
@@ -54,42 +60,19 @@ export default function VoiceEngine() {
     }, [convoyId]);
 
     useEffect(() => {
-        const AgoraRTC = agoraRef.current;
-        if (!clientRef.current || !AgoraRTC || !joinedRef.current) return;
-
         const toggleMic = async () => {
+            if (!localAudioTrackRef.current || !joinedRef.current) return;
+            
             try {
                 if (isTalkingLocally) {
-                    if (!localAudioTrackRef.current && !isPublishingRef.current) {
-                        isPublishingRef.current = true;
-                        console.log('[VoiceEngine] PTT Active: Starting mic...');
-                        try {
-                            const track = await AgoraRTC.createMicrophoneAudioTrack();
-                            localAudioTrackRef.current = track;
-                            await clientRef.current?.publish([track]);
-                        } finally {
-                            isPublishingRef.current = false;
-                        }
-                    }
+                    console.log('[VoiceEngine] Mic ENABLED');
+                    await localAudioTrackRef.current.setEnabled(true);
                 } else {
-                    // Check if we need to stop
-                    if (localAudioTrackRef.current && !isPublishingRef.current) {
-                        console.log('[VoiceEngine] PTT Inactive: Stopping mic...');
-                        const trackToClose = localAudioTrackRef.current;
-                        localAudioTrackRef.current = null;
-                        
-                        try {
-                            await clientRef.current?.unpublish([trackToClose]);
-                        } catch (e) {
-                            console.warn('[VoiceEngine] Unpublish failed:', e);
-                        } finally {
-                            trackToClose.close();
-                        }
-                    }
+                    console.log('[VoiceEngine] Mic DISABLED');
+                    await localAudioTrackRef.current.setEnabled(false);
                 }
             } catch (err) {
-                console.error('[VoiceEngine] PTT Stability Error:', err);
-                isPublishingRef.current = false;
+                console.error('[VoiceEngine] PTT Toggle Error:', err);
             }
         };
 

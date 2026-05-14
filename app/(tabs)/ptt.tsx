@@ -113,6 +113,11 @@ export default function PttScreen() {
                         onPressOut={handlePressOut}
                         activeOpacity={0.9}
                         delayLongPress={0}
+                        {...(Platform.OS === 'web' ? {
+                            onPointerDown: handlePressIn,
+                            onPointerUp: handlePressOut,
+                            onPointerLeave: handlePressOut,
+                        } : {})}
                         onContextMenu={(e: any) => {
                             if (Platform.OS === 'web') e.preventDefault();
                         }}
@@ -122,6 +127,7 @@ export default function PttScreen() {
                             isTalking
                                 ? { backgroundColor: activeChannel?.color ?? '#FF6A00' }
                                 : { backgroundColor: isDark ? '#1C1C1E' : '#fff', borderWidth: 4, borderColor: activeChannel?.color ?? '#FF6A00' },
+                            Platform.OS === 'web' && { cursor: 'pointer', userSelect: 'none' } as any
                         ]}
                     >
                         <MaterialCommunityIcons name="microphone-variant" size={72} color={isTalking ? 'white' : (activeChannel?.color ?? '#FF6A00')} pointerEvents="none" />
