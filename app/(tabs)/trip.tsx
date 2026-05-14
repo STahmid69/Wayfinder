@@ -48,6 +48,32 @@ export default function TripDashboardScreen() {
     const totalExpenses = ledger.reduce((s, i) => s + i.amount, 0);
 
     const handleEndConvoy = () => {
+        if (Platform.OS === 'web') {
+            const confirmed = window.confirm('End Convoy? This saves your trip summary and returns you to the lobby.');
+            if (confirmed) {
+                (async () => {
+                    await endConvoy();
+                    router.replace({
+                        pathname: '/trip-summary' as any,
+                        params: {
+                            convoy: JSON.stringify({
+                                id: '',
+                                code: convoyId ?? '',
+                                date: new Date().toISOString(),
+                                durationMin: tripStartTime ? Math.round((Date.now() - tripStartTime) / 60000) : 0,
+                                distanceKm: Math.round(totalDistanceKm * 10) / 10,
+                                members: users.length,
+                                messages: messages.length,
+                                expensesTotal: ledger.reduce((s, i) => s + i.amount, 0),
+                                votesCount: votes.length,
+                            }),
+                        },
+                    });
+                })();
+            }
+            return;
+        }
+
         Alert.alert(
             'End Convoy?',
             'This saves your trip summary and returns you to the lobby.',

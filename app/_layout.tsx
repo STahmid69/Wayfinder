@@ -1,4 +1,4 @@
-import { router, Stack } from 'expo-router';
+import { router, Stack, usePathname } from 'expo-router';
 import React, { useEffect } from 'react';
 import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -44,9 +44,14 @@ function WebWrapper({ children }: { children: React.ReactNode }) {
 
 function InitialLayout() {
     const { isLoaded, myName, convoyId } = useConvoy();
+    const pathname = usePathname();
 
     useEffect(() => {
         if (!isLoaded) return;
+        
+        // Skip global redirects if we are explicitly on the trip-summary page
+        if (pathname === '/trip-summary') return;
+
         if (!myName) {
             router.replace('/onboarding');
         } else if (!convoyId) {
@@ -54,7 +59,7 @@ function InitialLayout() {
         } else {
             router.replace('/(tabs)');
         }
-    }, [isLoaded, myName, convoyId]);
+    }, [isLoaded, myName, convoyId, pathname]);
 
     return (
         <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
