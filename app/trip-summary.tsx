@@ -21,6 +21,7 @@ function StatRow({ icon, label, value, color = '#FF6A00' }: { icon: string; labe
 }
 
 export default function TripSummaryScreen() {
+    const { leaveConvoy } = useConvoy();
     const params = useLocalSearchParams<{ convoy: string }>();
     const convoy: PastConvoy | null = params.convoy ? JSON.parse(params.convoy) : null;
 
@@ -102,7 +103,10 @@ export default function TripSummaryScreen() {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    onPress={() => router.replace('/lobby')}
+                    onPress={() => {
+                        leaveConvoy();
+                        router.replace('/lobby');
+                    }}
                     style={tw`bg-[#FF6A00] rounded-2xl py-5 items-center shadow-xl`}
                 >
                     <Text style={tw`text-white font-black text-lg uppercase tracking-widest`}>Back to Lobby</Text>

@@ -503,7 +503,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         };
         const existing: PastConvoy[] = JSON.parse(await AsyncStorage.getItem('wayfinder_past_convoys') || '[]');
         await AsyncStorage.setItem('wayfinder_past_convoys', JSON.stringify([past, ...existing].slice(0, 20)));
-        leaveConvoy();
+        // We don't call leaveConvoy() here anymore to avoid immediate redirect
     };
 
     // ─── Chat ────────────────────────────────────────────────────────────────
