@@ -1,23 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { createAgoraRtcEngine, ChannelProfileType, ClientRoleType } from '../lib/agora';
+import { useConvoy } from '../contexts/ConvoyContext';
 
 const AGORA_APP_ID = typeof process !== 'undefined'
     ? (process.env?.EXPO_PUBLIC_AGORA_APP_ID || '')
     : '';
 
-interface Props {
-    channelId: string;  // Agora channel base name (convoy code or sorted user-pair ID)
-    isTalking: boolean; // true = unmute and transmit, false = mute
-}
-
-export default function VoiceEngine({ channelId, isTalking }: Props) {
+export default function VoiceEngine() {
+    const { convoyId, myId, isTalkingLocally } = useConvoy();
     const engineRef = useRef<any>(null);
     const currentChannelRef = useRef<string | null>(null);
 
     // Initialize once on mount, tear down on unmount
     useEffect(() => {
-        if (!AGORA_APP_ID) {
-            console.warn('[VoiceEngine] EXPO_PUBLIC_AGORA_APP_ID is not set');
+        if (!AGORA_APP_ID || !convoyId) {
             return;
         }
 
@@ -50,14 +46,14 @@ export default function VoiceEngine({ channelId, isTalking }: Props) {
             engineRef.current = null;
             currentChannelRef.current = null;
         };
-    }, []);
+    }, [convoyId]); // Re-init if convoy ID changes (rare but possible)
 
-    // Join or switch Agora channel when channelId changes
+    // Join or switch Agora channel when convoyId changes
     useEffect(() => {
-        if (!engineRef.current || !channelId) return;
+        if (!engineRef.current || !convoyId) return;
 
-        // Prefix with 'wf_' to namespace channels away from any other Agora apps using the same App ID
-        const agoraChannel = `wf_${channelId}`;
+        // Prefix with 'wf_' to namespace channels
+        const agoraChannel = `wf_${convoyId}`;
         if (currentChannelRef.current === agoraChannel) return;
 
         try {
@@ -73,14 +69,14 @@ export default function VoiceEngine({ channelId, isTalking }: Props) {
         } catch (e) {
             console.warn('[VoiceEngine] channel join error:', e);
         }
-    }, [channelId]);
+    }, [convoyId]);
 
     // Mute / unmute in response to PTT button press
     useEffect(() => {
         try {
-            engineRef.current?.muteLocalAudioStream(!isTalking);
+            engineRef.current?.muteLocalAudioStream(!isTalkingLocally);
         } catch (_) {}
-    }, [isTalking]);
+    }, [isTalkingLocally]);
 
     return null;
 }

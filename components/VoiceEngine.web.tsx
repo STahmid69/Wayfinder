@@ -9,6 +9,7 @@ export default function VoiceEngine() {
     const localAudioTrackRef = useRef<any>(null);
     const agoraRef = useRef<any>(null);
     const joinedRef = useRef(false);
+    const isPublishingRef = useRef(false);
 
     useEffect(() => {
         if (!convoyId || !APP_ID) return;
@@ -33,13 +34,6 @@ export default function VoiceEngine() {
                 });
 
                 client.enableAudioVolumeIndicator();
-                client.on('volume-indicator', (volumes) => {
-                    volumes.forEach((volume) => {
-                        if (volume.level > 5) {
-                            console.log(`[VoiceEngine] User ${volume.uid} is making noise: ${volume.level}`);
-                        }
-                    });
-                });
 
                 await client.join(APP_ID, convoyId, null, myId);
                 joinedRef.current = true;
@@ -66,28 +60,36 @@ export default function VoiceEngine() {
         const toggleMic = async () => {
             try {
                 if (isTalkingLocally) {
-                    if (!localAudioTrackRef.current) {
+                    if (!localAudioTrackRef.current && !isPublishingRef.current) {
+                        isPublishingRef.current = true;
                         console.log('[VoiceEngine] PTT Active: Starting mic...');
-                        const track = await AgoraRTC.createMicrophoneAudioTrack();
-                        localAudioTrackRef.current = track;
-                        await clientRef.current?.publish([track]);
+                        try {
+                            const track = await AgoraRTC.createMicrophoneAudioTrack();
+                            localAudioTrackRef.current = track;
+                            await clientRef.current?.publish([track]);
+                        } finally {
+                            isPublishingRef.current = false;
+                        }
                     }
                 } else {
-                    setTimeout(async () => {
-                        if (!isTalkingLocally && localAudioTrackRef.current && joinedRef.current) {
-                            console.log('[VoiceEngine] PTT Inactive: Stopping mic...');
-                            try {
-                                await clientRef.current?.unpublish([localAudioTrackRef.current]);
-                            } catch (e) {
-                                console.warn('[VoiceEngine] Unpublish failed:', e);
-                            }
-                            localAudioTrackRef.current.close();
-                            localAudioTrackRef.current = null;
+                    // Check if we need to stop
+                    if (localAudioTrackRef.current && !isPublishingRef.current) {
+                        console.log('[VoiceEngine] PTT Inactive: Stopping mic...');
+                        const trackToClose = localAudioTrackRef.current;
+                        localAudioTrackRef.current = null;
+                        
+                        try {
+                            await clientRef.current?.unpublish([trackToClose]);
+                        } catch (e) {
+                            console.warn('[VoiceEngine] Unpublish failed:', e);
+                        } finally {
+                            trackToClose.close();
                         }
-                    }, 100);
+                    }
                 }
             } catch (err) {
                 console.error('[VoiceEngine] PTT Stability Error:', err);
+                isPublishingRef.current = false;
             }
         };
 

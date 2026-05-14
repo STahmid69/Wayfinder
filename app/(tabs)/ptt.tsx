@@ -49,7 +49,6 @@ export default function PttScreen() {
 
     return (
         <View style={tw`flex-1 bg-[#FAFAFA] dark:bg-[#121212]`}>
-            {convoyId && <VoiceEngine channelId={agoraChannelId} isTalking={isTalking} />}
             <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#FAFAFA]/90 dark:bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
 
             <View style={tw`${Platform.OS === 'web' ? 'pt-24' : 'pt-32'} px-6 flex-1`}>
@@ -114,6 +113,9 @@ export default function PttScreen() {
                         onPressOut={handlePressOut}
                         activeOpacity={0.9}
                         delayLongPress={0}
+                        onContextMenu={(e: any) => {
+                            if (Platform.OS === 'web') e.preventDefault();
+                        }}
                         hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
                         style={[
                             tw`w-52 h-52 rounded-full items-center justify-center shadow-2xl`,
@@ -122,8 +124,8 @@ export default function PttScreen() {
                                 : { backgroundColor: isDark ? '#1C1C1E' : '#fff', borderWidth: 4, borderColor: activeChannel?.color ?? '#FF6A00' },
                         ]}
                     >
-                        <MaterialCommunityIcons name="microphone-variant" size={72} color={isTalking ? 'white' : (activeChannel?.color ?? '#FF6A00')} />
-                        <Text style={[tw`font-black text-lg uppercase tracking-widest mt-1`, { color: isTalking ? 'white' : (activeChannel?.color ?? '#FF6A00') }]}>
+                        <MaterialCommunityIcons name="microphone-variant" size={72} color={isTalking ? 'white' : (activeChannel?.color ?? '#FF6A00')} pointerEvents="none" />
+                        <Text style={[tw`font-black text-lg uppercase tracking-widest mt-1`, { color: isTalking ? 'white' : (activeChannel?.color ?? '#FF6A00') }]} pointerEvents="none">
                             {isTalking ? 'Transmitting' : 'Hold To Talk'}
                         </Text>
                     </TouchableOpacity>
