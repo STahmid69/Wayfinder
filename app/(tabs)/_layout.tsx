@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, useColorScheme, Vibration, View } from 'react-native';
 import { useDeviceContext } from 'twrnc';
 import { useConvoy } from '../../contexts/ConvoyContext';
+import VoiceEngine from '../../components/VoiceEngine';
 import tw from '../../lib/tailwind';
 
 export default function TabLayout() {
@@ -70,6 +71,8 @@ export default function TabLayout() {
   }
 
   return (
+    <>
+    <VoiceEngine />
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -124,5 +127,6 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+    </>
   );
 }

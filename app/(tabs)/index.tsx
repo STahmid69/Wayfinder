@@ -1,275 +1,433 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView, BottomSheetView } from '@gorhom/bottom-sheet';
-import * as Location from 'expo-location';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { Alert, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
 import TopAppBar from '../../components/TopAppBar';
+import { MapView, Marker, RoutePolyline, RouteMarker, PROVIDER_DEFAULT } from '../../components/NativeMap';
+import { DRIVER_STATUS_LABELS, DriverStatus, HAZARD_LABELS, HazardType, useConvoy } from '../../contexts/ConvoyContext';
+import { useNavigation } from '../../contexts/NavigationContext';
+import SearchPanel from '../../components/SearchPanel';
+import NavigationPanel from '../../components/NavigationPanel';
 import tw from '../../lib/tailwind';
 
-import { MapView, Marker, PROVIDER_DEFAULT } from '../../components/NativeMap';
-import { useConvoy } from '../../contexts/ConvoyContext';
-
 const darkMapStyle = [
-  { "elementType": "geometry", "stylers": [{ "color": "#212121" }] },
-  { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
-  { "elementType": "labels.text.fill", "stylers": [{ "color": "#757575" }] },
-  { "elementType": "labels.text.stroke", "stylers": [{ "color": "#212121" }] },
-  { "featureType": "road", "elementType": "geometry", "stylers": [{ "color": "#303030" }] },
-  { "featureType": "road", "elementType": "geometry.stroke", "stylers": [{ "color": "#1a1a1a" }] },
-  { "featureType": "water", "elementType": "geometry", "stylers": [{ "color": "#000000" }] }
+    { elementType: 'geometry', stylers: [{ color: '#212121' }] },
+    { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+    { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
+    { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
+    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#303030' }] },
+    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1a1a1a' }] },
+    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
 ];
-const lightMapStyle = [
-  { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] }
+const lightMapStyle = [{ elementType: 'labels.icon', stylers: [{ visibility: 'off' }] }];
+
+const HAZARD_EMOJI: Record<HazardType, string> = {
+    speed_trap: '🚔', pothole: '🕳️', accident: '💥', road_closed: '🚧', construction: '🏗️',
+};
+
+const STATUS_OPTIONS: { key: DriverStatus; label: string; icon: string; color: string }[] = [
+    { key: 'moving', label: 'Moving', icon: 'navigation', color: '#00FF66' },
+    { key: 'gas', label: 'Gas Stop', icon: 'local-gas-station', color: '#FFD600' },
+    { key: 'bathroom', label: 'Bathroom', icon: 'wc', color: '#00D1FF' },
+    { key: 'food', label: 'Food Stop', icon: 'restaurant', color: '#FF6A00' },
+    { key: 'car_trouble', label: 'Car Trouble', icon: 'car-repair', color: '#FF3366' },
+    { key: 'pulling_over', label: 'Pulling Over', icon: 'pull-off', color: '#B44FFF' },
 ];
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 export default function ConvoyRadarScreen() {
-  const isWeb = Platform.OS === 'web';
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const mapRef = useRef<any>(null);
-  const snapPoints = useMemo(() => ['15%', '70%'], []);
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+    const bottomSheetRef = useRef<BottomSheet>(null);
+    const mapRef = useRef<any>(null);
+    const snapPoints = useMemo(() => ['18%', '50%'], []);
+    const isDark = useColorScheme() === 'dark';
+    const hasCenteredRef = useRef(false);
 
-  const { users, convoyId } = useConvoy();
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+    const { users, myId, convoyId, hazardPins, sosAlerts, myStatus, addHazardPin, sendSOS, dismissSOS, setMyStatus } = useConvoy();
+    const nav = useNavigation();
 
-  useEffect(() => {
-    (async () => {
-      if (Platform.OS === 'web') return;
-      try {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission Denied', 'Please enable location services for Expo Go in your phone settings to see your live position.');
-          return;
+    const me = users.find(u => u.id === myId);
+    const centerLat = me?.lat ?? 3.139;
+    const centerLng = me?.lng ?? 101.6869;
+    const currentSpeed = me?.speed ?? 0;
+
+    const [showStatusPicker, setShowStatusPicker] = useState(false);
+    const [showHazardPicker, setShowHazardPicker] = useState(false);
+
+    // Auto-center on first GPS fix
+    React.useEffect(() => {
+        if (me && !hasCenteredRef.current && mapRef.current) {
+            hasCenteredRef.current = true;
+            mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
         }
+    }, [me?.lat, me?.lng]);
 
-        // Try to get a fast last known location so it doesn't hang
-        let initialLoc = await Location.getLastKnownPositionAsync({});
-        if (!initialLoc) {
-          initialLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    // Auto-set origin to user's location when planning
+    useEffect(() => {
+        if (me && !nav.origin && nav.mode === 'planning') {
+            nav.setOrigin({ lat: me.lat, lng: me.lng }, 'My Location');
         }
+    }, [me?.lat, me?.lng, nav.mode]);
 
-        if (initialLoc) {
-          setLocation(initialLoc);
-          // Auto-pan to real location when found
-          if (mapRef.current) {
-            mapRef.current.animateToRegion({
-              latitude: initialLoc.coords.latitude,
-              longitude: initialLoc.coords.longitude,
-              latitudeDelta: 0.05,
-              longitudeDelta: 0.05,
-            });
-          }
+    // Feed GPS position to navigation context during active navigation
+    useEffect(() => {
+        if (me && nav.mode === 'navigating') {
+            nav.updatePosition({ lat: me.lat, lng: me.lng });
         }
+    }, [me?.lat, me?.lng, nav.mode]);
 
-        Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 2000, distanceInterval: 5 },
-          (newLoc) => {
-            setLocation(newLoc);
-          }
-        );
-      } catch (error) {
-        console.warn(error);
-        Alert.alert('Location Error', 'There was an issue fetching your location.');
-      }
-    })();
-  }, []);
+    // Fit map to route bounds when route is calculated
+    useEffect(() => {
+        if (nav.route && mapRef.current?.fitBounds) {
+            const bbox = nav.route.bbox;
+            if (bbox && bbox[0] !== 0) {
+                mapRef.current.fitBounds([
+                    [bbox[1], bbox[0]], // SW corner [lat, lng]
+                    [bbox[3], bbox[2]], // NE corner [lat, lng]
+                ]);
+            }
+        }
+    }, [nav.route]);
 
-  const centerOnUser = () => {
-    if (location && mapRef.current) {
-      mapRef.current.animateToRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.05,
-        longitudeDelta: 0.05,
-      });
-    }
-  };
+    const centerOnUser = () => {
+        if (me && mapRef.current) {
+            mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
+        }
+    };
 
-  const myLat = location ? location.coords.latitude : 36.1627;
-  const myLng = location ? location.coords.longitude : -115.1398;
-  const mySpeed = location ? Math.max(0, Math.round((location.coords.speed || 0) * 2.23694)) : 0;
+    const handleSOS = () => {
+        Alert.alert('🚨 Send SOS?', 'This will alert your entire convoy and send push notifications to everyone.', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Send SOS', style: 'destructive', onPress: sendSOS },
+        ]);
+    };
 
-  // Mix live DB users with static fallbacks for UI demo if unauthenticated
-  const activeUsers = convoyId && users.length > 0 ? users.map((u, i) => ({
-    id: u.id,
-    name: `Car ${i + 1}`,
-    color: i === 0 ? '#00D1FF' : '#00FF66',
-    lat: u.lat,
-    lng: u.lng,
-    speed: u.speed,
-    eta: 'Live',
-    status: 'Connected'
-  })) : [
-    { id: 1, name: 'You (Car 1)', color: '#00D1FF', lat: myLat, lng: myLng, speed: mySpeed, eta: '20m', status: 'Pacemaker / Leader' },
-    { id: 2, name: 'Safwans car', color: '#00FF66', lat: myLat - 0.005, lng: myLng - 0.005, speed: 62, eta: '22m', status: '1.2 Miles Behind' },
-    { id: 3, name: 'Sarah (Car 3)', color: '#FF3366', lat: myLat + 0.01, lng: myLng + 0.015, speed: 0, eta: '28m', status: 'Stopped - Falling Behind' },
-  ];
+    const handleAddHazard = (type: HazardType) => {
+        const pos = me ?? { lat: centerLat, lng: centerLng };
+        addHazardPin(type, pos.lat, pos.lng);
+        setShowHazardPicker(false);
+    };
 
-  const [aiAlertVisible, setAiAlertVisible] = useState(true);
-  const [sosActive, setSosActive] = useState(false);
+    // Handle map clicks for setting origin/destination
+    const handleMapClick = (latlng: { lat: number; lng: number }) => {
+        if (nav.mode === 'idle') return;
 
-  return (
-    <View style={tw`flex-1 bg-[#FAFAFA] dark:bg-[#121212]`}>
-      <View style={StyleSheet.absoluteFill}>
-        {/* ENABLED FOR NATIVE BUILD */}
-        {true ? (
-          <MapView
-            ref={mapRef}
-            style={StyleSheet.absoluteFill}
-            customMapStyle={isDark ? darkMapStyle : lightMapStyle}
-            provider={PROVIDER_DEFAULT}
-            initialRegion={{ latitude: myLat, longitude: myLng, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
-            showsUserLocation={true}
-            showsMyLocationButton={false}
-          >
-            {activeUsers.map((user: any) => (
-              <Marker key={user.id} coordinate={{ latitude: user.lat, longitude: user.lng }}>
-                <View style={tw`items-center`}>
-                  <View style={[tw`px-2 py-1 rounded-full mb-1 shadow-sm border`, { backgroundColor: user.color, borderColor: 'white' }]}>
-                    <Text style={tw`text-black text-[10px] font-bold`}>{user.name} {user.id === 1 ? '👑' : ''}</Text>
-                  </View>
-                  <View style={[tw`w-6 h-6 rounded-full border-2 border-white items-center justify-center shadow-lg`, { backgroundColor: user.color }]}>
-                    <MaterialCommunityIcons name="car-side" size={14} color="black" />
-                  </View>
-                </View>
-              </Marker>
-            ))}
-          </MapView>
-        ) : (
-          <View style={tw`flex-1 items-center justify-center bg-[#FAFAFA] dark:bg-[#1a1a1a]`}>
-            <MaterialIcons name="map" size={48} style={tw`text-zinc-300 dark:text-[#444]`} />
-            <Text style={tw`text-zinc-500 dark:text-gray-400 mt-4 text-center px-10`}>The Live Map is temporarily disabled to prevent crashing. To enable it on a custom Android build, a Google Maps API Key must be added to app.json.</Text>
-          </View>
-        )}
-      </View>
+        // If no destination is set, set destination
+        if (!nav.destination) {
+            nav.setDestination(latlng);
+        } else if (!nav.origin) {
+            nav.setOrigin(latlng);
+        } else {
+            // Both set — update destination
+            nav.setDestination(latlng);
+        }
+    };
 
-      <TopAppBar customStyle="bg-transparent absolute top-0 left-0 right-0 z-50 pt-8" />
+    // Distance to leader (first non-me user with role 'leader', else first other user)
+    const leader = users.find(u => u.role === 'leader' && u.id !== myId) ?? users.find(u => u.id !== myId);
+    const distToLeader = leader && me ? haversineKm(me.lat, me.lng, leader.lat, leader.lng) : null;
 
-      {/* AI Smart Assistant Banner */}
-      {aiAlertVisible && (
-        <View style={tw`absolute top-32 left-4 right-4 bg-white dark:bg-[#1C1C1E] border border-red-500/30 rounded-3xl p-4 shadow-xl z-50 flex-row items-center justify-between`}>
-          <View style={tw`flex-row items-center gap-3 flex-1`}>
-            <View style={tw`bg-red-500/10 dark:bg-red-500/20 p-2 rounded-full`}>
-              <MaterialCommunityIcons name="car-brake-alert" size={20} color="#EF4444" />
+    const isNavigating = nav.mode === 'navigating';
+
+    return (
+        <View style={tw`flex-1 bg-[#FAFAFA] dark:bg-[#121212]`}>
+            {/* Map */}
+            <View style={StyleSheet.absoluteFill}>
+                <MapView
+                    ref={mapRef}
+                    style={StyleSheet.absoluteFill}
+                    customMapStyle={isDark ? darkMapStyle : lightMapStyle}
+                    provider={PROVIDER_DEFAULT}
+                    initialRegion={{ latitude: centerLat, longitude: centerLng, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+                    showsUserLocation={false}
+                    onMapClick={nav.mode !== 'idle' ? handleMapClick : undefined}
+                >
+                    {/* Route Polyline */}
+                    {nav.route && (
+                        <RoutePolyline
+                            positions={nav.route.polyline}
+                            color="#FF6A00"
+                            weight={5}
+                            opacity={0.9}
+                        />
+                    )}
+
+                    {/* Route Markers */}
+                    {nav.origin && (
+                        <RouteMarker
+                            coordinate={{ latitude: nav.origin.lat, longitude: nav.origin.lng }}
+                            type="origin"
+                            label={nav.originLabel}
+                        />
+                    )}
+                    {nav.destination && (
+                        <RouteMarker
+                            coordinate={{ latitude: nav.destination.lat, longitude: nav.destination.lng }}
+                            type="destination"
+                            label={nav.destinationLabel}
+                        />
+                    )}
+
+                    {/* Convoy members */}
+                    {users.map(user => (
+                        <Marker
+                            key={user.id}
+                            coordinate={{ latitude: user.lat, longitude: user.lng }}
+                            markerColor={user.color}
+                            markerLabel={user.name + (user.id === myId ? ' (You)' : '')}
+                        >
+                            <View style={tw`items-center`}>
+                                <View style={[tw`px-2 py-1 rounded-full mb-1 shadow-sm`, { backgroundColor: user.color }]}>
+                                    <Text style={tw`text-black text-[10px] font-bold`}>
+                                        {user.name}{user.id === myId ? ' (You)' : ''}
+                                    </Text>
+                                </View>
+                                <View style={[
+                                    tw`w-7 h-7 rounded-full border-2 border-white items-center justify-center shadow-lg`,
+                                    { backgroundColor: user.color },
+                                    user.isTalking ? { borderColor: '#FFD600', borderWidth: 3 } : {},
+                                ]}>
+                                    <MaterialCommunityIcons name="car-side" size={16} color="black" />
+                                </View>
+                            </View>
+                        </Marker>
+                    ))}
+                    {/* Hazard pins */}
+                    {hazardPins.map(pin => (
+                        <Marker
+                            key={pin.id}
+                            coordinate={{ latitude: pin.lat, longitude: pin.lng }}
+                            markerColor="#FFD600"
+                            markerLabel={HAZARD_EMOJI[pin.type]}
+                        >
+                            <View style={tw`items-center`}>
+                                <View style={tw`bg-yellow-400 px-2 py-1 rounded-full shadow-md`}>
+                                    <Text style={tw`text-[16px]`}>{HAZARD_EMOJI[pin.type]}</Text>
+                                </View>
+                            </View>
+                        </Marker>
+                    ))}
+                    {/* SOS pins */}
+                    {sosAlerts.map(sos => (
+                        <Marker
+                            key={sos.id}
+                            coordinate={{ latitude: sos.lat, longitude: sos.lng }}
+                            markerColor="#FF3366"
+                            markerLabel={`🚨 ${sos.userName}`}
+                        >
+                            <View style={tw`items-center`}>
+                                <View style={tw`bg-red-500 px-2 py-1 rounded-full shadow-md`}>
+                                    <Text style={tw`text-white text-[10px] font-black`}>🚨 {sos.userName}</Text>
+                                </View>
+                            </View>
+                        </Marker>
+                    ))}
+                </MapView>
             </View>
-            <View style={tw`flex-1`}>
-              <Text style={tw`text-red-500 dark:text-red-400 font-black text-xs uppercase tracking-widest mb-0.5`}>Intelligent Alert</Text>
-              <Text style={tw`text-black dark:text-white font-bold text-xs`}>Sarah (Car 3) has fallen 3 miles behind.</Text>
+
+            <TopAppBar customStyle={`bg-transparent absolute top-0 left-0 right-0 z-50 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
+
+            {/* Search Panel (hides during navigation) */}
+            <SearchPanel />
+
+            {/* Navigation Panel (shows during navigation) */}
+            <NavigationPanel currentSpeed={currentSpeed} />
+
+            {/* SOS Alerts Banner */}
+            {sosAlerts.length > 0 && (
+                <View style={tw`absolute top-32 left-4 right-4 z-30`}>
+                    {sosAlerts.map(sos => (
+                        <View key={sos.id} style={tw`bg-red-500 rounded-2xl px-4 py-3 mb-2 flex-row items-center justify-between shadow-xl`}>
+                            <View style={tw`flex-row items-center gap-2`}>
+                                <Text style={tw`text-lg`}>🚨</Text>
+                                <View>
+                                    <Text style={tw`text-white font-black text-sm`}>{sos.userName} needs help!</Text>
+                                    <Text style={tw`text-white/80 text-[10px]`}>Tap map pin to navigate</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity onPress={() => dismissSOS(sos.id)} style={tw`bg-white/20 p-2 rounded-full`}>
+                                <MaterialIcons name="close" size={14} color="white" />
+                            </TouchableOpacity>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+            {/* HUD row - only show when NOT navigating */}
+            {!isNavigating && (
+                <View style={[tw`absolute left-0 right-0 px-4`, { top: sosAlerts.length > 0 ? 200 : (Platform.OS === 'web' ? 100 : 128) }]}>
+                    <View style={tw`flex-row justify-between items-center`}>
+                        <View style={tw`bg-white/90 dark:bg-black/80 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 flex-row items-center gap-2 shadow-sm`}>
+                            <View style={tw`w-2 h-2 rounded-full bg-green-500`} />
+                            <Text style={tw`text-black dark:text-white text-[10px] font-bold uppercase tracking-widest`}>
+                                {users.length} {users.length === 1 ? 'Car' : 'Cars'} Live
+                            </Text>
+                        </View>
+                        <TouchableOpacity onPress={centerOnUser} style={tw`bg-white/90 dark:bg-black/80 w-10 h-10 rounded-full border border-zinc-200 dark:border-zinc-800 items-center justify-center shadow-sm`}>
+                            <MaterialIcons name="my-location" size={20} style={tw`text-black dark:text-white`} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
+            {/* Floating Action Buttons (right side) */}
+            <View style={{ position: 'absolute', right: 16, bottom: isNavigating ? 160 : 220, zIndex: 40 }}>
+                {/* Recenter (during navigation) */}
+                {isNavigating && (
+                    <TouchableOpacity onPress={centerOnUser} style={tw`w-14 h-14 bg-white dark:bg-[#1C1C1E] border-2 border-zinc-200 dark:border-zinc-700 rounded-full items-center justify-center shadow-xl mb-3`}>
+                        <MaterialIcons name="my-location" size={24} style={tw`text-black dark:text-white`} />
+                    </TouchableOpacity>
+                )}
+                {/* SOS */}
+                <TouchableOpacity onPress={handleSOS} style={tw`w-14 h-14 bg-red-500 rounded-full items-center justify-center shadow-2xl mb-3`}>
+                    <Text style={tw`text-white font-black text-[11px] tracking-widest`}>SOS</Text>
+                </TouchableOpacity>
+                {/* Hazard */}
+                <TouchableOpacity onPress={() => setShowHazardPicker(true)} style={tw`w-14 h-14 bg-yellow-400 rounded-full items-center justify-center shadow-xl mb-3`}>
+                    <Text style={tw`text-[22px]`}>⚠️</Text>
+                </TouchableOpacity>
+                {/* Status */}
+                <TouchableOpacity onPress={() => setShowStatusPicker(true)} style={tw`w-14 h-14 bg-white dark:bg-[#1C1C1E] border-2 border-zinc-200 dark:border-zinc-700 rounded-full items-center justify-center shadow-xl`}>
+                    <MaterialIcons name="person-pin" size={26} style={tw`text-black dark:text-white`} />
+                </TouchableOpacity>
             </View>
-          </View>
-          <TouchableOpacity onPress={() => setAiAlertVisible(false)} style={tw`bg-zinc-50 dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 px-3 py-1.5 rounded-full items-center justify-center ml-2`}>
-            <Text style={tw`text-black dark:text-white font-bold text-[10px] uppercase`}>Dismiss</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+ 
+            {/* Bottom Sheet / Status Panel — hide during navigation */}
+            {!isNavigating && (
+                Platform.OS === 'web' ? (
+                    <View style={[tw`absolute bottom-24 left-0 right-0 bg-white/95 dark:bg-[#1C1C1E]/95 border-t border-zinc-200 dark:border-zinc-800 p-5 rounded-t-3xl shadow-2xl`, { height: 200 }]}>
+                        <View style={tw`flex-row justify-between items-center mb-4`}>
+                            <Text style={tw`text-[10px] font-black uppercase tracking-widest text-[#FF6A00]`}>
+                                Live Convoy Dashboard
+                            </Text>
+                        </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-3 flex-row pb-2`}>
+                            {users.map(user => (
+                                <View key={user.id} style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 w-44 relative overflow-hidden shadow-sm`}>
+                                    <View style={[tw`absolute left-0 top-0 bottom-0 w-1`, { backgroundColor: user.color }]} />
+                                    <View style={tw`flex-row items-center gap-1 mb-1 ml-1`}>
+                                        <Text style={tw`text-black dark:text-white font-bold text-sm`} numberOfLines={1}>
+                                            {user.name}{user.id === myId ? ' (You)' : ''}
+                                        </Text>
+                                    </View>
+                                    <Text style={tw`text-zinc-500 dark:text-zinc-400 text-[10px] mb-2 ml-1 uppercase font-bold tracking-tighter`}>
+                                        {user.status}
+                                    </Text>
+                                    <View style={tw`flex-row items-end justify-between ml-1`}>
+                                        <Text style={tw`text-black dark:text-white font-black text-xl`}>
+                                            {user.speed}<Text style={tw`text-zinc-500 text-[10px] font-normal`}> KM/H</Text>
+                                        </Text>
+                                        {user.id !== myId && (
+                                            <TouchableOpacity 
+                                                onPress={() => Linking.openURL(`https://www.waze.com/ul?ll=${user.lat},${user.lng}&navigate=yes`)}
+                                                style={tw`bg-[#33CCFF] w-8 h-8 rounded-lg items-center justify-center shadow-sm`}
+                                            >
+                                                <MaterialCommunityIcons name="navigation" size={16} color="white" />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                </View>
+                            ))}
+                        </ScrollView>
+                    </View>
+                ) : (
+                    <BottomSheet
+                        ref={bottomSheetRef}
+                        index={1}
+                        snapPoints={snapPoints}
+                        enablePanDownToClose={false}
+                        handleIndicatorStyle={{ backgroundColor: isDark ? '#52525B' : '#D4D4D8', width: 40 }}
+                        backgroundStyle={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800`}
+                    >
+                        <BottomSheetView style={tw`flex-1 px-5 pt-1 pb-6`}>
+                            <View style={tw`flex-row justify-between items-center mb-4`}>
+                                <Text style={tw`text-[10px] font-bold uppercase tracking-widest text-[#0099D1] dark:text-[#00D1FF]`}>
+                                    Convoy Status • Live
+                                </Text>
+                            </View>
+                            <BottomSheetScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-3 flex-row`}>
+                                {users.map(user => (
+                                    <View key={user.id} style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 w-44 relative overflow-hidden shadow-sm`}>
+                                        <View style={[tw`absolute left-0 top-0 bottom-0 w-1`, { backgroundColor: user.color }]} />
+                                        <View style={tw`flex-row items-center gap-1 mb-1 ml-1`}>
+                                            <Text style={tw`text-black dark:text-white font-bold text-sm`} numberOfLines={1}>
+                                                {user.name}{user.id === myId ? ' (You)' : ''}
+                                            </Text>
+                                        </View>
+                                        <Text style={tw`text-zinc-500 dark:text-zinc-400 text-[10px] mb-2 ml-1`}>
+                                            {user.status}
+                                        </Text>
+                                        <View style={tw`flex-row items-end justify-between ml-1`}>
+                                            <Text style={tw`text-black dark:text-white font-black text-lg`}>
+                                                {user.speed}<Text style={tw`text-zinc-500 text-[10px] font-normal`}> km/h</Text>
+                                            </Text>
+                                            {user.id !== myId && (
+                                                <TouchableOpacity 
+                                                    onPress={() => Linking.openURL(`https://www.waze.com/ul?ll=${user.lat},${user.lng}&navigate=yes`)}
+                                                    style={tw`bg-[#33CCFF] w-8 h-8 rounded-lg items-center justify-center shadow-sm`}
+                                                >
+                                                    <MaterialCommunityIcons name="navigation" size={16} color="white" />
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
+                                ))}
+                            </BottomSheetScrollView>
+                        </BottomSheetView>
+                    </BottomSheet>
+                )
+            )}
 
-      {/* Unified Convoy Commands (Regroup & SOS) */}
-      <View style={tw`absolute right-4 ${aiAlertVisible ? 'top-56' : 'top-32'} items-end gap-3 z-50`}>
-        <TouchableOpacity
-          style={tw`bg-white dark:bg-[#1C1C1E] border border-blue-500/50 w-14 h-14 rounded-full shadow-2xl items-center justify-center flex-row gap-1`}
-        >
-          <MaterialCommunityIcons name="set-center" size={20} color="#0058bb" style={tw`dark:text-[#00D1FF]`} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setSosActive(!sosActive)}
-          style={tw`bg-white dark:bg-[#1C1C1E] border border-red-500/50 w-14 h-14 rounded-full shadow-2xl items-center justify-center`}
-        >
-          <Text style={tw`text-red-500 font-black text-[10px] uppercase tracking-widest`}>SOS</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Emergency Active Modal */}
-      {sosActive && (
-        <View style={tw`absolute inset-0 bg-[#FAFAFA]/95 dark:bg-[#121212]/95 z-50 items-center justify-center p-6 backdrop-blur-md`}>
-          <View style={tw`w-24 h-24 bg-red-500/10 rounded-full items-center justify-center mb-6 border border-red-500/30`}>
-            <MaterialIcons name="warning" size={48} color="#EF4444" />
-          </View>
-          <Text style={tw`text-black dark:text-white font-black text-4xl mb-2 text-center tracking-tighter uppercase`}>Emergency</Text>
-          <Text style={tw`text-zinc-600 dark:text-zinc-400 text-center font-medium mb-12 max-w-[80%]`}>Broadcasting exact coordinates to all convoy members and sounding alarm...</Text>
-
-          <TouchableOpacity onPress={() => setSosActive(false)} style={tw`bg-black dark:bg-white px-10 py-5 rounded-full shadow-xl`}>
-            <Text style={tw`text-white dark:text-black font-black text-sm uppercase tracking-widest`}>Cancel Alert</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={[tw`absolute top-[280px] left-0 right-0 px-4 pointer-events-none`]}>
-        <View style={tw`flex-row justify-between items-center mb-4`}>
-          <View style={tw`bg-white/90 dark:bg-black/80 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 flex-row items-center gap-2 shadow-sm`}>
-            <View style={tw`w-2 h-2 rounded-full ${convoyId ? 'bg-green-500' : 'bg-red-500'}`} />
-            <Text selectable={true} style={tw`text-black dark:text-white text-[10px] font-bold uppercase tracking-widest`}>
-              CODE: {convoyId}
-            </Text>
-          </View>
-          <TouchableOpacity onPress={centerOnUser} style={tw`bg-white/90 dark:bg-black/80 w-10 h-10 rounded-full border border-zinc-200 dark:border-zinc-800 items-center justify-center pointer-events-auto shadow-sm`}>
-            <MaterialIcons name="my-location" size={20} style={tw`text-black dark:text-white`} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <BottomSheet
-        ref={bottomSheetRef}
-        index={1}
-        snapPoints={snapPoints}
-        enablePanDownToClose={false}
-        handleIndicatorStyle={{ backgroundColor: isDark ? '#52525B' : '#D4D4D8', width: 40 }}
-        backgroundStyle={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800`}
-      >
-        <BottomSheetView style={tw`flex-1 px-5 pt-1 pb-6`}>
-          <View style={tw`flex-row justify-between items-center mb-4`}>
-            <Text style={tw`text-[10px] font-bold uppercase tracking-widest text-[#0099D1] dark:text-[#00D1FF]`}>Convoy Status • Live Run</Text>
-            <View style={tw`bg-green-500/10 dark:bg-green-500/20 px-2 py-0.5 rounded-sm flex-row items-center gap-1`}>
-              <MaterialIcons name="alt-route" size={10} color="#00FF66" />
-              <Text style={tw`text-[#1b6d24] dark:text-[#00FF66] text-[8px] font-bold uppercase tracking-widest`}>Auto-Following Pacemaker</Text>
-            </View>
-          </View>
-
-          <BottomSheetScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-3 mb-2 flex-row`}>
-            {activeUsers.map((user: any) => (
-              <View key={user.id} style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 w-44 relative overflow-hidden shadow-sm`}>
-                <View style={[tw`absolute left-0 top-0 bottom-0 w-1`, { backgroundColor: user.color }]} />
-                <Text style={tw`text-black dark:text-white font-bold text-base mb-1 ml-1`} numberOfLines={1}>{user.name}</Text>
-                <Text style={tw`text-zinc-500 dark:text-zinc-400 text-xs mb-3 ml-1`}>{user.status}</Text>
-                <View style={tw`flex-row items-end justify-between ml-1`}>
-                  <View>
-                    <Text style={tw`text-zinc-500 text-[10px] font-bold uppercase`}>ETA</Text>
-                    <Text style={tw`text-black dark:text-white font-bold`}>{user.eta}</Text>
-                  </View>
-                  <View style={tw`items-end`}>
-                    <Text style={tw`text-black dark:text-white font-black text-xl`}>{user.speed}<Text style={tw`text-zinc-500 text-[10px] font-normal`}>mph</Text></Text>
-                  </View>
+            {/* Status Picker Modal */}
+            <Modal visible={showStatusPicker} transparent animationType="slide" onRequestClose={() => setShowStatusPicker(false)}>
+                <TouchableOpacity style={tw`flex-1 bg-black/50`} activeOpacity={1} onPress={() => setShowStatusPicker(false)} />
+                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
+                    <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest mb-5 text-center`}>My Status</Text>
+                    {STATUS_OPTIONS.map(opt => (
+                        <TouchableOpacity
+                            key={opt.key}
+                            onPress={() => { setMyStatus(opt.key); setShowStatusPicker(false); }}
+                            style={[
+                                tw`flex-row items-center gap-4 p-4 rounded-2xl mb-2 border`,
+                                myStatus === opt.key
+                                    ? { backgroundColor: opt.color + '20', borderColor: opt.color }
+                                    : tw`border-zinc-200 dark:border-zinc-800`,
+                            ]}
+                        >
+                            <MaterialIcons name={opt.icon as any} size={24} color={myStatus === opt.key ? opt.color : (isDark ? '#52525B' : '#A1A1AA')} />
+                            <Text style={[tw`font-bold text-base`, myStatus === opt.key ? { color: opt.color } : tw`text-black dark:text-white`]}>
+                                {opt.label}
+                            </Text>
+                            {myStatus === opt.key && <MaterialIcons name="check" size={20} color={opt.color} style={tw`ml-auto`} />}
+                        </TouchableOpacity>
+                    ))}
                 </View>
-              </View>
-            ))}
-          </BottomSheetScrollView>
+            </Modal>
 
-          <View style={tw`flex-row justify-between items-center mt-6 mb-4`}>
-            <Text style={tw`text-[10px] font-bold uppercase tracking-widest text-[#FF6A00]`}>Nearby Hotspots • Malaysia</Text>
-          </View>
-
-          <BottomSheetScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-3 pb-8`}>
-            {[
-              { id: 1, name: 'Petronas Twin Towers', type: 'Landmark', distance: '1.2 km', color: '#00D1FF', icon: 'office-building' },
-              { id: 2, name: 'Batu Caves', type: 'Attraction', distance: '12 km', color: '#FF3366', icon: 'terrain' },
-              { id: 3, name: 'Genting Highlands', type: 'Resort/Rest Stop', distance: '45 km', color: '#00FF66', icon: 'pine-tree' },
-              { id: 4, name: 'KL Tower', type: 'Landmark', distance: '2.5 km', color: '#FF6A00', icon: 'radio-tower' },
-            ].map((spot) => (
-              <View key={spot.id} style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 w-44 items-center shadow-sm`}>
-                <View style={[tw`w-12 h-12 rounded-full mb-3 items-center justify-center`, { backgroundColor: spot.color + '20' }]}>
-                  <MaterialCommunityIcons name={spot.icon as any} size={24} color={spot.color} />
+            {/* Hazard Picker Modal */}
+            <Modal visible={showHazardPicker} transparent animationType="slide" onRequestClose={() => setShowHazardPicker(false)}>
+                <TouchableOpacity style={tw`flex-1 bg-black/50`} activeOpacity={1} onPress={() => setShowHazardPicker(false)} />
+                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
+                    <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest mb-2 text-center`}>Report Hazard</Text>
+                    <Text style={tw`text-zinc-500 text-xs text-center mb-5`}>Pins at your current location, visible to all convoy members</Text>
+                    {(Object.keys(HAZARD_LABELS) as HazardType[]).map(type => (
+                        <TouchableOpacity
+                            key={type}
+                            onPress={() => handleAddHazard(type)}
+                            style={tw`flex-row items-center gap-4 p-4 rounded-2xl mb-2 border border-zinc-200 dark:border-zinc-800 bg-[#FAFAFA] dark:bg-[#121212]`}
+                        >
+                            <Text style={tw`text-2xl`}>{HAZARD_EMOJI[type]}</Text>
+                            <Text style={tw`text-black dark:text-white font-bold text-base`}>{HAZARD_LABELS[type]}</Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
-                <Text style={tw`text-black dark:text-white font-bold text-center mb-1`} numberOfLines={1}>{spot.name}</Text>
-                <Text style={tw`text-zinc-500 text-[10px] uppercase font-bold tracking-widest text-center mb-2`}>{spot.type}</Text>
-                <View style={tw`bg-zinc-100 dark:bg-zinc-800 px-3 py-1 rounded-full`}>
-                  <Text style={tw`text-zinc-600 dark:text-zinc-300 font-bold text-xs`}>{spot.distance}</Text>
-                </View>
-              </View>
-            ))}
-          </BottomSheetScrollView>
-        </BottomSheetView>
-      </BottomSheet>
-    </View>
-  );
+            </Modal>
+        </View>
+    );
 }
