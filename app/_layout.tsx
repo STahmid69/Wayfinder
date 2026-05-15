@@ -1,10 +1,11 @@
 import { router, Stack, usePathname } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ConvoyProvider, useConvoy } from '../contexts/ConvoyContext';
 import { NavigationProvider } from '../contexts/NavigationContext';
+import { hasSeenPermissions } from './permissions';
 
 function WebWrapper({ children }: { children: React.ReactNode }) {
     if (Platform.OS !== 'web') return <>{children}</>;
@@ -45,24 +46,40 @@ function WebWrapper({ children }: { children: React.ReactNode }) {
 function InitialLayout() {
     const { isLoaded, myName, convoyId } = useConvoy();
     const pathname = usePathname();
+    const [permissionsChecked, setPermissionsChecked] = useState(false);
+    const [needsPermissions, setNeedsPermissions] = useState(false);
 
     useEffect(() => {
-        if (!isLoaded) return;
-        
+        if (Platform.OS === 'web') {
+            setPermissionsChecked(true);
+            return;
+        }
+        hasSeenPermissions().then((seen) => {
+            setNeedsPermissions(!seen);
+            setPermissionsChecked(true);
+        });
+    }, []);
+
+    useEffect(() => {
+        if (!isLoaded || !permissionsChecked) return;
+
         // Skip global redirects if we are explicitly on the trip-summary page
         if (pathname === '/trip-summary') return;
 
-        if (!myName) {
+        if (needsPermissions && Platform.OS !== 'web') {
+            router.replace('/permissions');
+        } else if (!myName) {
             router.replace('/onboarding');
         } else if (!convoyId) {
             router.replace('/lobby');
         } else {
             router.replace('/(tabs)');
         }
-    }, [isLoaded, myName, convoyId, pathname]);
+    }, [isLoaded, permissionsChecked, needsPermissions, myName, convoyId, pathname]);
 
     return (
         <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+            <Stack.Screen name="permissions" />
             <Stack.Screen name="onboarding" />
             <Stack.Screen name="lobby" />
             <Stack.Screen name="(tabs)" />

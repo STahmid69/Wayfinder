@@ -1,9 +1,11 @@
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import React from 'react';
-import { Share, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Platform, Share, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PastConvoy } from '../contexts/ConvoyContext';
+import * as StoreReview from 'expo-store-review';
+import { PastConvoy, useConvoy } from '../contexts/ConvoyContext';
+import { CURRENCY_SYMBOL } from '../constants/currency';
 import tw from '../lib/tailwind';
 
 function StatRow({ icon, label, value, color = '#FF6A00' }: { icon: string; label: string; value: string; color?: string }) {
@@ -25,6 +27,13 @@ export default function TripSummaryScreen() {
     const params = useLocalSearchParams<{ convoy: string }>();
     const convoy: PastConvoy | null = params.convoy ? JSON.parse(params.convoy) : null;
 
+    useEffect(() => {
+        if (!convoy || Platform.OS === 'web') return;
+        StoreReview.isAvailableAsync().then((available) => {
+            if (available) StoreReview.requestReview();
+        });
+    }, []);
+
     const handleShare = () => {
         if (!convoy) return;
         Share.share({
@@ -34,7 +43,7 @@ export default function TripSummaryScreen() {
                 `Duration: ${convoy.durationMin < 60 ? `${convoy.durationMin}m` : `${Math.floor(convoy.durationMin / 60)}h ${convoy.durationMin % 60}m`}\n` +
                 `Distance: ${convoy.distanceKm} km\n` +
                 `Members: ${convoy.members}\n` +
-                `Expenses: RM ${convoy.expensesTotal.toFixed(2)}\n\n` +
+                `Expenses: ${CURRENCY_SYMBOL}${convoy.expensesTotal.toFixed(2)}\n\n` +
                 `Powered by Wayfinder 🧭`,
         });
     };
@@ -92,7 +101,7 @@ export default function TripSummaryScreen() {
                             </View>
                             <Text style={tw`text-zinc-400 font-medium`}>Shared Expenses</Text>
                         </View>
-                        <Text style={tw`text-white font-black text-base`}>RM {convoy.expensesTotal.toFixed(2)}</Text>
+                        <Text style={tw`text-white font-black text-base`}>{CURRENCY_SYMBOL} {convoy.expensesTotal.toFixed(2)}</Text>
                     </View>
                 </View>
 

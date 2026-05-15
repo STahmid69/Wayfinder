@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import TopAppBar from '../../components/TopAppBar';
 import { ConvoyRole, useConvoy } from '../../contexts/ConvoyContext';
+import { CURRENCY_SYMBOL } from '../../constants/currency';
 import tw from '../../lib/tailwind';
 
 function formatDuration(startTime: number | null): string {
@@ -147,7 +148,7 @@ export default function TripDashboardScreen() {
                     <View style={tw`flex-row justify-between items-center`}>
                         <View>
                             <Text style={tw`text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest`}>Total Expenses</Text>
-                            <Text style={tw`text-black dark:text-white font-black text-3xl mt-1`}>RM {totalExpenses.toFixed(2)}</Text>
+                            <Text style={tw`text-black dark:text-white font-black text-3xl mt-1`}>{CURRENCY_SYMBOL} {totalExpenses.toFixed(2)}</Text>
                         </View>
                         <MaterialIcons name="receipt-long" size={32} color="#FF6A00" />
                     </View>

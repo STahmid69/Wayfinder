@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import TopAppBar from '../../components/TopAppBar';
 import { Vote, useConvoy } from '../../contexts/ConvoyContext';
+import { CURRENCY_SYMBOL } from '../../constants/currency';
 import tw from '../../lib/tailwind';
 
 function getTimeAgo(isoString: string): string {
@@ -419,7 +420,7 @@ export default function SocialHubScreen() {
                             <View>
                                 <Text style={tw`text-zinc-500 text-[10px] font-bold uppercase tracking-widest`}>Total Trip Spend</Text>
                                 <Text style={tw`text-black dark:text-white font-black text-3xl mt-0.5`}>
-                                    RM {totalExpenses.toFixed(2)}
+                                    {CURRENCY_SYMBOL} {totalExpenses.toFixed(2)}
                                 </Text>
                             </View>
                             <TouchableOpacity
@@ -437,11 +438,11 @@ export default function SocialHubScreen() {
                                 <Text style={tw`text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3`}>Your Balance</Text>
                                 <View style={tw`flex-row justify-between mb-2`}>
                                     <Text style={tw`text-zinc-500 text-sm`}>You paid</Text>
-                                    <Text style={tw`text-black dark:text-white font-bold`}>RM {myPaid.toFixed(2)}</Text>
+                                    <Text style={tw`text-black dark:text-white font-bold`}>{CURRENCY_SYMBOL} {myPaid.toFixed(2)}</Text>
                                 </View>
                                 <View style={tw`flex-row justify-between mb-3`}>
                                     <Text style={tw`text-zinc-500 text-sm`}>Your share ({users.length} {users.length === 1 ? 'person' : 'people'})</Text>
-                                    <Text style={tw`text-black dark:text-white font-bold`}>RM {fairShare.toFixed(2)}</Text>
+                                    <Text style={tw`text-black dark:text-white font-bold`}>{CURRENCY_SYMBOL} {fairShare.toFixed(2)}</Text>
                                 </View>
                                 <View style={tw`h-[1px] bg-zinc-100 dark:bg-zinc-800 mb-3`} />
                                 <View style={tw`flex-row justify-between items-center`}>
@@ -451,7 +452,7 @@ export default function SocialHubScreen() {
                                             tw`font-black text-xl`,
                                             myBalance > 0.009 ? tw`text-[#00C853]` : myBalance < -0.009 ? tw`text-[#FF3366]` : tw`text-zinc-400`,
                                         ]}>
-                                            {myBalance > 0.009 ? '+' : ''}RM {myBalance.toFixed(2)}
+                                            {myBalance > 0.009 ? '+' : ''}{CURRENCY_SYMBOL} {myBalance.toFixed(2)}
                                         </Text>
                                         <Text style={tw`text-zinc-400 text-[10px] font-bold uppercase tracking-widest`}>
                                             {myBalance > 0.009 ? 'you are owed' : myBalance < -0.009 ? 'you owe' : 'settled up'}
@@ -491,7 +492,7 @@ export default function SocialHubScreen() {
                                                 tw`font-black text-lg`,
                                                 isMe ? tw`text-[#FF6A00]` : tw`text-black dark:text-white`,
                                             ]}>
-                                                RM {item.amount.toFixed(2)}
+                                                {CURRENCY_SYMBOL} {item.amount.toFixed(2)}
                                             </Text>
                                         </View>
                                     );
