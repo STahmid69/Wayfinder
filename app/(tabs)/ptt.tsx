@@ -17,7 +17,6 @@ const STATUS_OPTIONS: { key: DriverStatus; emoji: string; color: string }[] = [
 
 export default function PttScreen() {
     const { users, myId, convoyId, whoIsTalking, setTalking, myStatus, setMyStatus } = useConvoy();
-    const isDark = useColorScheme() === 'dark';
     const [isTalking, setIsTalking] = useState(false);
 
     const channels = [
@@ -48,13 +47,13 @@ export default function PttScreen() {
     };
 
     return (
-        <View style={tw`flex-1 bg-[#FAFAFA] dark:bg-[#121212]`}>
-            <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#FAFAFA]/90 dark:bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
+        <View style={tw`flex-1 bg-[#121212]`}>
+            <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
 
             <View style={tw`${Platform.OS === 'web' ? 'pt-24' : 'pt-32'} px-6 flex-1`}>
                 <View style={tw`mb-6 items-center`}>
-                    <Text style={tw`text-black dark:text-white font-black text-3xl tracking-tighter`}>Comm Center</Text>
-                    <Text style={tw`text-zinc-500 dark:text-zinc-400 text-sm mt-1 uppercase tracking-widest font-bold`}>
+                    <Text style={tw`text-white font-black text-3xl tracking-tighter`}>Comm Center</Text>
+                    <Text style={tw`text-zinc-400 text-sm mt-1 uppercase tracking-widest font-bold`}>
                         {activeChannel?.name ?? 'Convoy Broadcast'}
                     </Text>
                 </View>
@@ -63,7 +62,7 @@ export default function PttScreen() {
                 {whoIsTalking && whoIsTalking !== myId && (
                     <View style={tw`bg-yellow-400/20 border border-yellow-400/40 rounded-2xl px-4 py-3 flex-row items-center gap-3 mb-4`}>
                         <View style={tw`w-2 h-2 rounded-full bg-yellow-400`} />
-                        <Text style={tw`text-yellow-600 dark:text-yellow-300 font-black text-sm uppercase tracking-widest`}>
+                        <Text style={tw`text-yellow-300 font-black text-sm uppercase tracking-widest`}>
                             {talkingUser?.name ?? 'Someone'} is talking...
                         </Text>
                     </View>
@@ -79,14 +78,14 @@ export default function PttScreen() {
                                     key={channel.id}
                                     onPress={() => setActiveChannelId(channel.id)}
                                     style={[
-                                        tw`p-4 rounded-3xl border w-36 items-center bg-white dark:bg-[#121212]`,
+                                        tw`p-4 rounded-3xl border w-36 items-center bg-[#1C1C1E]`,
                                         isActive
-                                            ? { borderColor: channel.color, borderWidth: 2, backgroundColor: isDark ? '#1C1C1E' : '#fff' }
-                                            : tw`border-zinc-200 dark:border-zinc-800`,
+                                            ? { borderColor: channel.color, borderWidth: 2 }
+                                            : tw`border-zinc-800`,
                                     ]}
                                 >
                                     <MaterialCommunityIcons name={channel.icon as any} size={28} color={isActive ? channel.color : '#52525B'} />
-                                    <Text style={[tw`mt-2 font-bold text-center text-xs`, isActive ? tw`text-black dark:text-white` : tw`text-zinc-400`]} numberOfLines={1}>
+                                    <Text style={[tw`mt-2 font-bold text-center text-xs`, isActive ? tw`text-white` : tw`text-zinc-400`]} numberOfLines={1}>
                                         {channel.name}
                                     </Text>
                                 </TouchableOpacity>
@@ -101,7 +100,7 @@ export default function PttScreen() {
                         tw`absolute w-[300px] h-[300px] rounded-full border items-center justify-center`,
                         isTalking
                             ? { borderColor: `${activeChannel?.color ?? '#FF6A00'}40`, backgroundColor: `${activeChannel?.color ?? '#FF6A00'}10` }
-                            : tw`border-zinc-200/50 dark:border-zinc-800/50`,
+                            : tw`border-zinc-800/50`,
                     ]}>
                         {isTalking && (
                             <MaterialCommunityIcons name="access-point" size={90} color={activeChannel?.color ?? '#FF6A00'} style={tw`absolute -top-10 opacity-50`} />
@@ -126,7 +125,7 @@ export default function PttScreen() {
                             tw`w-52 h-52 rounded-full items-center justify-center shadow-2xl`,
                             isTalking
                                 ? { backgroundColor: activeChannel?.color ?? '#FF6A00' }
-                                : { backgroundColor: isDark ? '#1C1C1E' : '#fff', borderWidth: 4, borderColor: activeChannel?.color ?? '#FF6A00' },
+                                : { backgroundColor: '#1C1C1E', borderWidth: 4, borderColor: activeChannel?.color ?? '#FF6A00' },
                             Platform.OS === 'web' && { cursor: 'pointer', userSelect: 'none' } as any
                         ]}
                     >
@@ -153,7 +152,7 @@ export default function PttScreen() {
                                         tw`px-3 py-2 rounded-full border flex-row items-center gap-1.5`,
                                         isActive
                                             ? { backgroundColor: opt.color + '25', borderColor: opt.color }
-                                            : tw`border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#1C1C1E]`,
+                                            : tw`border-zinc-800 bg-[#1C1C1E]`,
                                     ]}
                                 >
                                     <Text style={tw`text-sm`}>{opt.emoji}</Text>

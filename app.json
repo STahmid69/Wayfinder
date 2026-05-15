@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "wayfinderapp",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.shababtahmid18.wayfinderapp",

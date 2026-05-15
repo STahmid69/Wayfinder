@@ -13,8 +13,7 @@ function WebWrapper({ children }: { children: React.ReactNode }) {
         <View style={{
             flex: 1,
             backgroundColor: '#000',
-            alignItems: 'center',
-            justifyContent: 'center',
+            // Using margin: '0 auto' for more stable centering of absolute children on web
         }}>
             <style dangerouslySetInnerHTML={{ __html: `
                 body { background-color: #000; overflow: hidden; }
@@ -28,13 +27,13 @@ function WebWrapper({ children }: { children: React.ReactNode }) {
                 width: '100%',
                 maxWidth: 480,
                 height: '100%',
-                maxHeight: 900,
-                backgroundColor: '#121212',
-                overflow: 'hidden',
+                marginHorizontal: 'auto', // Centering
+                backgroundColor: '#000',
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 20 },
                 shadowOpacity: 0.5,
                 shadowRadius: 40,
+                position: 'relative',
             }}>
                 {children}
             </View>
@@ -48,21 +47,20 @@ function InitialLayout() {
 
     useEffect(() => {
         if (!isLoaded) return;
-        
-        // Skip global redirects if we are explicitly on the trip-summary page
+
         if (pathname === '/trip-summary') return;
 
         if (!myName) {
             router.replace('/onboarding');
         } else if (!convoyId) {
             router.replace('/lobby');
-        } else {
+        } else if (pathname === '/onboarding' || pathname === '/lobby') {
             router.replace('/(tabs)');
         }
     }, [isLoaded, myName, convoyId, pathname]);
 
     return (
-        <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
+        <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade' }}>
             <Stack.Screen name="onboarding" />
             <Stack.Screen name="lobby" />
             <Stack.Screen name="(tabs)" />

@@ -46,7 +46,6 @@ export default function ConvoyRadarScreen() {
     const bottomSheetRef = useRef<BottomSheet>(null);
     const mapRef = useRef<any>(null);
     const snapPoints = useMemo(() => ['18%', '50%'], []);
-    const isDark = useColorScheme() === 'dark';
     const hasCenteredRef = useRef(false);
 
     const { users, myId, convoyId, hazardPins, sosAlerts, myStatus, addHazardPin, sendSOS, dismissSOS, setMyStatus } = useConvoy();
@@ -129,20 +128,16 @@ export default function ConvoyRadarScreen() {
         }
     };
 
-    // Distance to leader (first non-me user with role 'leader', else first other user)
-    const leader = users.find(u => u.role === 'leader' && u.id !== myId) ?? users.find(u => u.id !== myId);
-    const distToLeader = leader && me ? haversineKm(me.lat, me.lng, leader.lat, leader.lng) : null;
-
     const isNavigating = nav.mode === 'navigating';
 
     return (
-        <View style={tw`flex-1 bg-[#FAFAFA] dark:bg-[#121212]`}>
+        <View style={tw`flex-1 bg-[#121212]`}>
             {/* Map */}
             <View style={StyleSheet.absoluteFill}>
                 <MapView
                     ref={mapRef}
                     style={StyleSheet.absoluteFill}
-                    customMapStyle={isDark ? darkMapStyle : lightMapStyle}
+                    customMapStyle={darkMapStyle}
                     provider={PROVIDER_DEFAULT}
                     initialRegion={{ latitude: centerLat, longitude: centerLng, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
                     showsUserLocation={false}
@@ -263,14 +258,14 @@ export default function ConvoyRadarScreen() {
             {!isNavigating && (
                 <View style={[tw`absolute left-0 right-0 px-4`, { top: sosAlerts.length > 0 ? 200 : (Platform.OS === 'web' ? 100 : 128) }]}>
                     <View style={tw`flex-row justify-between items-center`}>
-                        <View style={tw`bg-white/90 dark:bg-black/80 px-3 py-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 flex-row items-center gap-2 shadow-sm`}>
+                        <View style={tw`bg-black/80 px-3 py-1.5 rounded-full border border-zinc-800 flex-row items-center gap-2 shadow-sm`}>
                             <View style={tw`w-2 h-2 rounded-full bg-green-500`} />
-                            <Text style={tw`text-black dark:text-white text-[10px] font-bold uppercase tracking-widest`}>
+                            <Text style={tw`text-white text-[10px] font-bold uppercase tracking-widest`}>
                                 {users.length} {users.length === 1 ? 'Car' : 'Cars'} Live
                             </Text>
                         </View>
-                        <TouchableOpacity onPress={centerOnUser} style={tw`bg-white/90 dark:bg-black/80 w-10 h-10 rounded-full border border-zinc-200 dark:border-zinc-800 items-center justify-center shadow-sm`}>
-                            <MaterialIcons name="my-location" size={20} style={tw`text-black dark:text-white`} />
+                        <TouchableOpacity onPress={centerOnUser} style={tw`bg-black/80 w-10 h-10 rounded-full border border-zinc-800 items-center justify-center shadow-sm`}>
+                            <MaterialIcons name="my-location" size={20} style={tw`text-white`} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -280,8 +275,8 @@ export default function ConvoyRadarScreen() {
             <View style={{ position: 'absolute', right: 16, bottom: isNavigating ? 160 : 220, zIndex: 40 }}>
                 {/* Recenter (during navigation) */}
                 {isNavigating && (
-                    <TouchableOpacity onPress={centerOnUser} style={tw`w-14 h-14 bg-white dark:bg-[#1C1C1E] border-2 border-zinc-200 dark:border-zinc-700 rounded-full items-center justify-center shadow-xl mb-3`}>
-                        <MaterialIcons name="my-location" size={24} style={tw`text-black dark:text-white`} />
+                    <TouchableOpacity onPress={centerOnUser} style={tw`w-14 h-14 bg-[#1C1C1E] border-2 border-zinc-700 rounded-full items-center justify-center shadow-xl mb-3`}>
+                        <MaterialIcons name="my-location" size={24} style={tw`text-white`} />
                     </TouchableOpacity>
                 )}
                 {/* SOS */}
@@ -293,15 +288,15 @@ export default function ConvoyRadarScreen() {
                     <Text style={tw`text-[22px]`}>⚠️</Text>
                 </TouchableOpacity>
                 {/* Status */}
-                <TouchableOpacity onPress={() => setShowStatusPicker(true)} style={tw`w-14 h-14 bg-white dark:bg-[#1C1C1E] border-2 border-zinc-200 dark:border-zinc-700 rounded-full items-center justify-center shadow-xl`}>
-                    <MaterialIcons name="person-pin" size={26} style={tw`text-black dark:text-white`} />
+                <TouchableOpacity onPress={() => setShowStatusPicker(true)} style={tw`w-14 h-14 bg-[#1C1C1E] border-2 border-zinc-700 rounded-full items-center justify-center shadow-xl`}>
+                    <MaterialIcons name="person-pin" size={26} style={tw`text-white`} />
                 </TouchableOpacity>
             </View>
  
             {/* Bottom Sheet / Status Panel — hide during navigation */}
             {!isNavigating && (
                 Platform.OS === 'web' ? (
-                    <View style={[tw`absolute bottom-24 left-0 right-0 bg-white/95 dark:bg-[#1C1C1E]/95 border-t border-zinc-200 dark:border-zinc-800 p-5 rounded-t-3xl shadow-2xl`, { height: 200 }]}>
+                    <View style={[tw`bg-[#1C1C1E]/95 border-t border-zinc-800 p-5 rounded-t-3xl shadow-2xl`, { height: 200, position: 'absolute', bottom: 0, left: 0, right: 0 }]}>
                         <View style={tw`flex-row justify-between items-center mb-4`}>
                             <Text style={tw`text-[10px] font-black uppercase tracking-widest text-[#FF6A00]`}>
                                 Live Convoy Dashboard
@@ -309,18 +304,18 @@ export default function ConvoyRadarScreen() {
                         </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-3 flex-row pb-2`}>
                             {users.map(user => (
-                                <View key={user.id} style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 w-44 relative overflow-hidden shadow-sm`}>
+                                <View key={user.id} style={tw`bg-[#121212] border border-zinc-800 rounded-2xl p-4 w-44 relative overflow-hidden shadow-sm`}>
                                     <View style={[tw`absolute left-0 top-0 bottom-0 w-1`, { backgroundColor: user.color }]} />
                                     <View style={tw`flex-row items-center gap-1 mb-1 ml-1`}>
-                                        <Text style={tw`text-black dark:text-white font-bold text-sm`} numberOfLines={1}>
+                                        <Text style={tw`text-white font-bold text-sm`} numberOfLines={1}>
                                             {user.name}{user.id === myId ? ' (You)' : ''}
                                         </Text>
                                     </View>
-                                    <Text style={tw`text-zinc-500 dark:text-zinc-400 text-[10px] mb-2 ml-1 uppercase font-bold tracking-tighter`}>
+                                    <Text style={tw`text-zinc-400 text-[10px] mb-2 ml-1 uppercase font-bold tracking-tighter`}>
                                         {user.status}
                                     </Text>
                                     <View style={tw`flex-row items-end justify-between ml-1`}>
-                                        <Text style={tw`text-black dark:text-white font-black text-xl`}>
+                                        <Text style={tw`text-white font-black text-xl`}>
                                             {user.speed}<Text style={tw`text-zinc-500 text-[10px] font-normal`}> KM/H</Text>
                                         </Text>
                                         {user.id !== myId && (
@@ -342,8 +337,8 @@ export default function ConvoyRadarScreen() {
                         index={1}
                         snapPoints={snapPoints}
                         enablePanDownToClose={false}
-                        handleIndicatorStyle={{ backgroundColor: isDark ? '#52525B' : '#D4D4D8', width: 40 }}
-                        backgroundStyle={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800`}
+                        handleIndicatorStyle={{ backgroundColor: '#52525B', width: 40 }}
+                        backgroundStyle={tw`bg-[#1C1C1E] border border-zinc-800`}
                     >
                         <BottomSheetView style={tw`flex-1 px-5 pt-1 pb-6`}>
                             <View style={tw`flex-row justify-between items-center mb-4`}>
@@ -387,8 +382,8 @@ export default function ConvoyRadarScreen() {
             {/* Status Picker Modal */}
             <Modal visible={showStatusPicker} transparent animationType="slide" onRequestClose={() => setShowStatusPicker(false)}>
                 <TouchableOpacity style={tw`flex-1 bg-black/50`} activeOpacity={1} onPress={() => setShowStatusPicker(false)} />
-                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
-                    <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest mb-5 text-center`}>My Status</Text>
+                <View style={tw`bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
+                    <Text style={tw`text-white font-black text-lg uppercase tracking-widest mb-5 text-center`}>My Status</Text>
                     {STATUS_OPTIONS.map(opt => (
                         <TouchableOpacity
                             key={opt.key}
@@ -397,11 +392,11 @@ export default function ConvoyRadarScreen() {
                                 tw`flex-row items-center gap-4 p-4 rounded-2xl mb-2 border`,
                                 myStatus === opt.key
                                     ? { backgroundColor: opt.color + '20', borderColor: opt.color }
-                                    : tw`border-zinc-200 dark:border-zinc-800`,
+                                    : tw`border-zinc-800`,
                             ]}
                         >
-                            <MaterialIcons name={opt.icon as any} size={24} color={myStatus === opt.key ? opt.color : (isDark ? '#52525B' : '#A1A1AA')} />
-                            <Text style={[tw`font-bold text-base`, myStatus === opt.key ? { color: opt.color } : tw`text-black dark:text-white`]}>
+                            <MaterialIcons name={opt.icon as any} size={24} color={myStatus === opt.key ? opt.color : '#52525B'} />
+                            <Text style={[tw`font-bold text-base`, myStatus === opt.key ? { color: opt.color } : tw`text-white`]}>
                                 {opt.label}
                             </Text>
                             {myStatus === opt.key && <MaterialIcons name="check" size={20} color={opt.color} style={tw`ml-auto`} />}
@@ -413,17 +408,17 @@ export default function ConvoyRadarScreen() {
             {/* Hazard Picker Modal */}
             <Modal visible={showHazardPicker} transparent animationType="slide" onRequestClose={() => setShowHazardPicker(false)}>
                 <TouchableOpacity style={tw`flex-1 bg-black/50`} activeOpacity={1} onPress={() => setShowHazardPicker(false)} />
-                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
-                    <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest mb-2 text-center`}>Report Hazard</Text>
+                <View style={tw`bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
+                    <Text style={tw`text-white font-black text-lg uppercase tracking-widest mb-2 text-center`}>Report Hazard</Text>
                     <Text style={tw`text-zinc-500 text-xs text-center mb-5`}>Pins at your current location, visible to all convoy members</Text>
                     {(Object.keys(HAZARD_LABELS) as HazardType[]).map(type => (
                         <TouchableOpacity
                             key={type}
                             onPress={() => handleAddHazard(type)}
-                            style={tw`flex-row items-center gap-4 p-4 rounded-2xl mb-2 border border-zinc-200 dark:border-zinc-800 bg-[#FAFAFA] dark:bg-[#121212]`}
+                            style={tw`flex-row items-center gap-4 p-4 rounded-2xl mb-2 border border-zinc-800 bg-[#121212]`}
                         >
                             <Text style={tw`text-2xl`}>{HAZARD_EMOJI[type]}</Text>
-                            <Text style={tw`text-black dark:text-white font-bold text-base`}>{HAZARD_LABELS[type]}</Text>
+                            <Text style={tw`text-white font-bold text-base`}>{HAZARD_LABELS[type]}</Text>
                         </TouchableOpacity>
                     ))}
                 </View>

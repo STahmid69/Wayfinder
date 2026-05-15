@@ -35,7 +35,7 @@ export default function NavigationPanel({ currentSpeed }: { currentSpeed?: numbe
                 )}
 
                 {/* Main Instruction Card */}
-                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden`}>
+                <View style={tw`bg-[#1C1C1E] rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden`}>
                     <View style={tw`flex-row items-center`}>
                         {/* Maneuver Icon */}
                         <View style={tw`bg-[#FF6A00] w-20 py-5 items-center justify-center`}>
@@ -48,7 +48,7 @@ export default function NavigationPanel({ currentSpeed }: { currentSpeed?: numbe
                         {/* Instruction Text */}
                         <View style={tw`flex-1 px-4 py-3`}>
                             <Text
-                                style={tw`text-black dark:text-white font-bold text-sm`}
+                                style={tw`text-white font-bold text-sm`}
                                 numberOfLines={2}
                             >
                                 {nav.currentInstruction}
@@ -60,10 +60,10 @@ export default function NavigationPanel({ currentSpeed }: { currentSpeed?: numbe
 
             {/* ─── Bottom Card: Trip Summary ──────────────────────────── */}
             <View style={tw`absolute bottom-28 left-4 right-4 z-40`}>
-                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden`}>
+                <View style={tw`bg-[#1C1C1E] rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden`}>
 
                     {/* Progress Bar */}
-                    <View style={tw`h-1 bg-zinc-100 dark:bg-zinc-800`}>
+                    <View style={tw`h-1 bg-zinc-800`}>
                         <View
                             style={[
                                 tw`h-1 bg-[#FF6A00]`,
@@ -74,8 +74,8 @@ export default function NavigationPanel({ currentSpeed }: { currentSpeed?: numbe
 
                     <View style={tw`flex-row items-center px-4 py-4`}>
                         {/* Speed */}
-                        <View style={tw`items-center mr-4 pr-4 border-r border-zinc-100 dark:border-zinc-800`}>
-                            <Text style={tw`text-black dark:text-white font-black text-2xl`}>
+                        <View style={tw`items-center mr-4 pr-4 border-r border-zinc-800`}>
+                            <Text style={tw`text-white font-black text-2xl`}>
                                 {currentSpeed ?? 0}
                             </Text>
                             <Text style={tw`text-zinc-400 text-[9px] font-bold uppercase tracking-widest`}>
@@ -86,7 +86,7 @@ export default function NavigationPanel({ currentSpeed }: { currentSpeed?: numbe
                         {/* ETA + Distance */}
                         <View style={tw`flex-1`}>
                             <View style={tw`flex-row items-baseline gap-2`}>
-                                <Text style={tw`text-black dark:text-white font-black text-lg`}>
+                                <Text style={tw`text-white font-black text-lg`}>
                                     {nav.remainingDurationDisplay}
                                 </Text>
                                 <Text style={tw`text-zinc-400 text-xs font-bold`}>

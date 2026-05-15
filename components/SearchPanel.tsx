@@ -92,7 +92,7 @@ export default function SearchPanel() {
                 <TouchableOpacity
                     onPress={() => setIsExpanded(true)}
                     activeOpacity={0.9}
-                    style={tw`bg-white dark:bg-[#1C1C1E] rounded-2xl px-5 py-4 flex-row items-center gap-3 border border-zinc-200 dark:border-zinc-800 shadow-xl`}
+                    style={tw`bg-[#1C1C1E] rounded-2xl px-5 py-4 flex-row items-center gap-3 border border-zinc-800 shadow-xl`}
                 >
                     <MaterialIcons name="search" size={22} color="#FF6A00" />
                     <Text style={tw`text-zinc-400 dark:text-zinc-500 font-bold text-base flex-1`}>
@@ -109,7 +109,7 @@ export default function SearchPanel() {
     // ─── Expanded State ───────────────────────────────────────────────────────
     return (
         <View style={[tw`absolute left-4 right-4 z-40`, { top: Platform.OS === 'web' ? 80 : 100 }]}>
-            <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-2xl overflow-hidden`}>
+            <View style={tw`bg-[#1C1C1E] rounded-3xl border border-zinc-800 shadow-2xl overflow-hidden`}>
 
                 {/* Header */}
                 <View style={tw`flex-row items-center justify-between px-4 pt-4 pb-2`}>
@@ -137,8 +137,8 @@ export default function SearchPanel() {
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                                 placeholder="Search start location..."
-                                placeholderTextColor={isDark ? '#52525B' : '#A1A1AA'}
-                                style={tw`flex-1 text-black dark:text-white font-bold text-sm h-8`}
+                                placeholderTextColor="#52525B"
+                                style={tw`flex-1 text-white font-bold text-sm h-8`}
                                 autoFocus
                                 onBlur={() => {
                                     if (!searchQuery) setActiveField(null);
@@ -146,7 +146,7 @@ export default function SearchPanel() {
                             />
                         ) : (
                             <Text
-                                style={tw`flex-1 ${nav.origin ? 'text-black dark:text-white font-bold' : 'text-zinc-400 dark:text-zinc-500'} text-sm`}
+                                style={tw`flex-1 ${nav.origin ? 'text-white font-bold' : 'text-zinc-500'} text-sm`}
                                 numberOfLines={1}
                             >
                                 {nav.originLabel || 'My Location'}
@@ -170,8 +170,8 @@ export default function SearchPanel() {
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                                 placeholder="Search destination..."
-                                placeholderTextColor={isDark ? '#52525B' : '#A1A1AA'}
-                                style={tw`flex-1 text-black dark:text-white font-bold text-sm h-8`}
+                                placeholderTextColor="#52525B"
+                                style={tw`flex-1 text-white font-bold text-sm h-8`}
                                 autoFocus
                                 onBlur={() => {
                                     if (!searchQuery) setActiveField(null);
@@ -179,7 +179,7 @@ export default function SearchPanel() {
                             />
                         ) : (
                             <Text
-                                style={tw`flex-1 ${nav.destination ? 'text-black dark:text-white font-bold' : 'text-zinc-400 dark:text-zinc-500'} text-sm`}
+                                style={tw`flex-1 ${nav.destination ? 'text-white font-bold' : 'text-zinc-500'} text-sm`}
                                 numberOfLines={1}
                             >
                                 {nav.destinationLabel || 'Where to?'}
@@ -194,7 +194,7 @@ export default function SearchPanel() {
                     {(nav.origin || nav.destination) && (
                         <TouchableOpacity
                             onPress={nav.swapOriginDestination}
-                            style={tw`absolute right-4 top-12 w-8 h-8 bg-zinc-100 dark:bg-zinc-800 rounded-full items-center justify-center`}
+                            style={tw`absolute right-4 top-12 w-8 h-8 bg-zinc-800 rounded-full items-center justify-center`}
                         >
                             <MaterialIcons name="swap-vert" size={18} color={isDark ? '#A1A1AA' : '#52525B'} />
                         </TouchableOpacity>
@@ -219,7 +219,7 @@ export default function SearchPanel() {
                                     >
                                         <Text style={tw`text-lg`}>{getPlaceIcon(place.type)}</Text>
                                         <View style={tw`flex-1`}>
-                                            <Text style={tw`text-black dark:text-white font-bold text-sm`} numberOfLines={1}>
+                                            <Text style={tw`text-white font-bold text-sm`} numberOfLines={1}>
                                                 {place.shortName}
                                             </Text>
                                             <Text style={tw`text-zinc-400 text-[10px]`} numberOfLines={1}>
@@ -255,7 +255,7 @@ export default function SearchPanel() {
                         <View style={tw`flex-row items-center gap-4 mb-4`}>
                             <View style={tw`flex-1`}>
                                 <View style={tw`flex-row items-baseline gap-2`}>
-                                    <Text style={tw`text-black dark:text-white font-black text-2xl`}>
+                                    <Text style={tw`text-white font-black text-2xl`}>
                                         {formatDuration(nav.route.duration)}
                                     </Text>
                                     <Text style={tw`text-zinc-400 text-xs font-bold`}>
@@ -275,9 +275,9 @@ export default function SearchPanel() {
                         <View style={tw`flex-row gap-3`}>
                             <TouchableOpacity
                                 onPress={handleClearRoute}
-                                style={tw`flex-1 bg-zinc-100 dark:bg-zinc-800 py-3.5 rounded-2xl items-center`}
+                                style={tw`flex-1 bg-zinc-800 py-3.5 rounded-2xl items-center`}
                             >
-                                <Text style={tw`text-zinc-600 dark:text-zinc-300 font-black uppercase tracking-widest text-xs`}>
+                                <Text style={tw`text-zinc-300 font-black uppercase tracking-widest text-xs`}>
                                     Cancel
                                 </Text>
                             </TouchableOpacity>

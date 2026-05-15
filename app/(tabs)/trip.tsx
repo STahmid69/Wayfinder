@@ -15,7 +15,7 @@ function formatDuration(startTime: number | null): string {
 
 function StatCard({ label, value, sub, color, icon }: { label: string; value: string; sub?: string; color: string; icon: string }) {
     return (
-        <View style={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 flex-1 shadow-sm`}>
+        <View style={tw`bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-4 flex-1 shadow-sm`}>
             <MaterialIcons name={icon as any} size={20} color={color} style={tw`mb-2`} />
             <Text style={tw`text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest`}>{label}</Text>
             <Text style={[tw`font-black text-2xl mt-0.5`, { color }]}>{value}</Text>
@@ -105,8 +105,8 @@ export default function TripDashboardScreen() {
     };
 
     return (
-        <View style={tw`flex-1 bg-[#F4F4F5] dark:bg-[#121212]`}>
-            <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#F4F4F5]/90 dark:bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
+        <View style={tw`flex-1 bg-[#121212]`}>
+            <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={tw`${Platform.OS === 'web' ? 'pt-24' : 'pt-32'} px-5 pb-40`}>
 
@@ -115,7 +115,7 @@ export default function TripDashboardScreen() {
                     <Text style={tw`text-[#FF6A00] text-[10px] font-bold uppercase tracking-widest mb-1`}>
                         Active Convoy • {convoyId}
                     </Text>
-                    <Text style={tw`text-4xl font-black text-black dark:text-white tracking-tighter`}>Trip Stats</Text>
+                    <Text style={tw`text-4xl font-black text-white tracking-tighter`}>Trip Stats</Text>
                 </View>
 
                 {/* Live stat cards — row 1 */}
@@ -143,11 +143,11 @@ export default function TripDashboardScreen() {
                 </View>
 
                 {/* Expenses */}
-                <View style={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 mb-6 shadow-sm`}>
+                <View style={tw`bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-5 mb-6 shadow-sm`}>
                     <View style={tw`flex-row justify-between items-center`}>
                         <View>
-                            <Text style={tw`text-zinc-500 dark:text-zinc-400 text-[10px] font-bold uppercase tracking-widest`}>Total Expenses</Text>
-                            <Text style={tw`text-black dark:text-white font-black text-3xl mt-1`}>RM {totalExpenses.toFixed(2)}</Text>
+                            <Text style={tw`text-zinc-400 text-[10px] font-bold uppercase tracking-widest`}>Total Expenses</Text>
+                            <Text style={tw`text-white font-black text-3xl mt-1`}>RM {totalExpenses.toFixed(2)}</Text>
                         </View>
                         <MaterialIcons name="receipt-long" size={32} color="#FF6A00" />
                     </View>
@@ -159,8 +159,8 @@ export default function TripDashboardScreen() {
                 </View>
 
                 {/* Convoy Roles */}
-                <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest mb-3`}>Convoy Roles</Text>
-                <View style={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden mb-6 shadow-sm`}>
+                <Text style={tw`text-white font-black text-lg uppercase tracking-widest mb-3`}>Convoy Roles</Text>
+                <View style={tw`bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden mb-6 shadow-sm`}>
                     {ROLE_OPTIONS.map((opt, idx) => {
                         const isMyRole = myRole === opt.key;
                         const holderUser = users.find(u => u.role === opt.key);
@@ -172,14 +172,14 @@ export default function TripDashboardScreen() {
                                 onPress={() => claimRole(opt.key)}
                                 style={[
                                     tw`flex-row items-center justify-between px-5 py-4`,
-                                    idx < ROLE_OPTIONS.length - 1 && tw`border-b border-zinc-100 dark:border-zinc-800`,
+                                    idx < ROLE_OPTIONS.length - 1 && tw`border-b border-zinc-800`,
                                     isMyRole && tw`bg-[#FF6A00]/5`,
                                 ]}
                             >
                                 <View style={tw`flex-row items-center gap-3`}>
                                     <Text style={tw`text-2xl`}>{opt.emoji}</Text>
                                     <View>
-                                        <Text style={[tw`font-bold text-base`, isMyRole ? tw`text-[#FF6A00]` : tw`text-black dark:text-white`]}>
+                                        <Text style={[tw`font-bold text-base`, isMyRole ? tw`text-[#FF6A00]` : tw`text-white`]}>
                                             {opt.label}
                                         </Text>
                                         <Text style={tw`text-zinc-400 text-xs`}>{opt.desc}</Text>
@@ -187,8 +187,8 @@ export default function TripDashboardScreen() {
                                 </View>
                                 <View style={tw`items-end`}>
                                     {holderName ? (
-                                        <View style={[tw`px-2 py-1 rounded-full`, isMyRole ? tw`bg-[#FF6A00]/15` : tw`bg-zinc-100 dark:bg-zinc-800`]}>
-                                            <Text style={[tw`text-[10px] font-bold`, isMyRole ? tw`text-[#FF6A00]` : tw`text-zinc-500 dark:text-zinc-400`]}>
+                                        <View style={[tw`px-2 py-1 rounded-full`, isMyRole ? tw`bg-[#FF6A00]/15` : tw`bg-zinc-800`]}>
+                                            <Text style={[tw`text-[10px] font-bold`, isMyRole ? tw`text-[#FF6A00]` : tw`text-zinc-400`]}>
                                                 {holderName}
                                             </Text>
                                         </View>
@@ -202,8 +202,8 @@ export default function TripDashboardScreen() {
                 </View>
 
                 {/* Convoy members leaderboard */}
-                <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest mb-3`}>Members</Text>
-                <View style={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden mb-8 shadow-sm`}>
+                <Text style={tw`text-white font-black text-lg uppercase tracking-widest mb-3`}>Members</Text>
+                <View style={tw`bg-[#1C1C1E] border border-zinc-800 rounded-2xl overflow-hidden mb-8 shadow-sm`}>
                     {users.length === 0 ? (
                         <View style={tw`items-center py-8`}>
                             <Text style={tw`text-zinc-400 text-sm`}>No members yet</Text>
@@ -213,14 +213,14 @@ export default function TripDashboardScreen() {
                             key={user.id}
                             style={[
                                 tw`flex-row items-center px-5 py-4`,
-                                idx < users.length - 1 && tw`border-b border-zinc-100 dark:border-zinc-800`,
+                                idx < users.length - 1 && tw`border-b border-zinc-800`,
                             ]}
                         >
                             <View style={[tw`w-9 h-9 rounded-full items-center justify-center mr-3`, { backgroundColor: user.color }]}>
                                 <Text style={tw`text-black font-black text-sm`}>{user.name[0]?.toUpperCase()}</Text>
                             </View>
                             <View style={tw`flex-1`}>
-                                <Text style={tw`text-black dark:text-white font-bold`}>
+                                <Text style={tw`text-white font-bold`}>
                                     {user.name}{user.id === myId ? ' (You)' : ''}
                                 </Text>
                                 <Text style={tw`text-zinc-400 text-xs`}>{user.speed} km/h</Text>

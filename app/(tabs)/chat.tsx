@@ -29,7 +29,6 @@ function getTimeAgo(isoString: string): string {
 // ─── Propose Vote Sheet ───────────────────────────────────────────────────────
 function ProposeVoteSheet({ onClose }: { onClose: () => void }) {
     const { proposeVote } = useConvoy();
-    const isDark = useColorScheme() === 'dark';
     const [title, setTitle] = useState('');
     const [options, setOptions] = useState(['', '']);
 
@@ -45,10 +44,10 @@ function ProposeVoteSheet({ onClose }: { onClose: () => void }) {
 
     return (
         <View style={tw`absolute inset-0 bg-black/60 z-50 items-center justify-center p-4`}>
-            <View style={[tw`bg-white dark:bg-[#1C1C1E] rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-2xl`, { width: '100%', maxWidth: 500, maxHeight: '90%' }]}>
+            <View style={[tw`bg-[#1C1C1E] rounded-3xl border border-zinc-800 shadow-2xl`, { width: '100%', maxWidth: 500, maxHeight: '90%' }]}>
                 {/* Header */}
-                <View style={tw`flex-row justify-between items-center p-6 pb-4 border-b border-zinc-100 dark:border-zinc-900`}>
-                    <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest`}>
+                <View style={tw`flex-row justify-between items-center p-6 pb-4 border-b border-zinc-900`}>
+                    <Text style={tw`text-white font-black text-lg uppercase tracking-widest`}>
                         Propose
                     </Text>
                     
@@ -63,7 +62,7 @@ function ProposeVoteSheet({ onClose }: { onClose: () => void }) {
                         </TouchableOpacity>
                         
                         <TouchableOpacity onPress={onClose} style={tw`p-1`}>
-                            <MaterialIcons name="close" size={24} color={isDark ? '#52525B' : '#A1A1AA'} />
+                            <MaterialIcons name="close" size={24} color="#52525B" />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -80,7 +79,7 @@ function ProposeVoteSheet({ onClose }: { onClose: () => void }) {
                         onChangeText={setTitle}
                         placeholder="e.g. Lunch Break"
                         placeholderTextColor="#3F3F46"
-                        style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-black dark:text-white font-bold mb-4`}
+                        style={tw`bg-[#121212] border border-zinc-800 rounded-xl px-4 py-3 text-white font-bold mb-4`}
                         autoFocus
                     />
 
@@ -92,7 +91,7 @@ function ProposeVoteSheet({ onClose }: { onClose: () => void }) {
                                 onChangeText={v => setOptions(prev => prev.map((o, j) => (j === i ? v : o)))}
                                 placeholder={`Option ${i + 1}`}
                                 placeholderTextColor="#3F3F46"
-                                style={tw`flex-1 bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-black dark:text-white font-bold`}
+                                style={tw`flex-1 bg-[#121212] border border-zinc-800 rounded-xl px-4 py-3 text-white font-bold`}
                             />
                             {options.length > 2 && (
                                 <TouchableOpacity onPress={() => setOptions(prev => prev.filter((_, j) => j !== i))}>
@@ -121,7 +120,6 @@ function ProposeVoteSheet({ onClose }: { onClose: () => void }) {
 // ─── Add Expense Sheet ────────────────────────────────────────────────────────
 function AddExpenseSheet({ onClose }: { onClose: () => void }) {
     const { addLedgerItem } = useConvoy();
-    const isDark = useColorScheme() === 'dark';
     const [description, setDescription] = useState('');
     const [amount, setAmount] = useState('');
 
@@ -145,9 +143,9 @@ function AddExpenseSheet({ onClose }: { onClose: () => void }) {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ width: '100%', maxWidth: 500 }}
             >
-                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-3xl border border-zinc-200 dark:border-zinc-800 shadow-2xl`}>
-                    <View style={tw`flex-row justify-between items-center p-6 pb-4 border-b border-zinc-100 dark:border-zinc-900`}>
-                        <Text style={tw`text-black dark:text-white font-black text-lg uppercase tracking-widest`}>
+                <View style={tw`bg-[#1C1C1E] rounded-3xl border border-zinc-800 shadow-2xl`}>
+                    <View style={tw`flex-row justify-between items-center p-6 pb-4 border-b border-zinc-900`}>
+                        <Text style={tw`text-white font-black text-lg uppercase tracking-widest`}>
                             Add Expense
                         </Text>
                         <View style={tw`flex-row items-center gap-3`}>
@@ -155,7 +153,7 @@ function AddExpenseSheet({ onClose }: { onClose: () => void }) {
                                 <Text style={tw`text-white font-black uppercase tracking-widest text-[10px]`}>Add</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={onClose} style={tw`p-1`}>
-                                <MaterialIcons name="close" size={24} color={isDark ? '#52525B' : '#A1A1AA'} />
+                                <MaterialIcons name="close" size={24} color="#52525B" />
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -167,7 +165,7 @@ function AddExpenseSheet({ onClose }: { onClose: () => void }) {
                             onChangeText={setDescription}
                             placeholder="e.g. Gas, Lunch, Toll"
                             placeholderTextColor="#3F3F46"
-                            style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-black dark:text-white font-bold mb-4`}
+                            style={tw`bg-[#121212] border border-zinc-800 rounded-xl px-4 py-3 text-white font-bold mb-4`}
                             autoFocus
                             returnKeyType="next"
                             maxLength={60}
@@ -180,7 +178,7 @@ function AddExpenseSheet({ onClose }: { onClose: () => void }) {
                             placeholder="0.00"
                             placeholderTextColor="#3F3F46"
                             keyboardType="decimal-pad"
-                            style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-black dark:text-white font-black text-2xl mb-2`}
+                            style={tw`bg-[#121212] border border-zinc-800 rounded-xl px-4 py-3 text-white font-black text-2xl mb-2`}
                             returnKeyType="done"
                             onSubmitEditing={handleSubmit}
                         />
@@ -281,24 +279,24 @@ export default function SocialHubScreen() {
     };
 
     return (
-        <View style={tw`flex-1 bg-[#FAFAFA] dark:bg-[#121212]`}>
-            <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#FAFAFA]/90 dark:bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
+        <View style={tw`flex-1 bg-[#121212]`}>
+            <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
 
             <View style={tw`${Platform.OS === 'web' ? 'pt-24' : 'pt-32'} px-4 pb-24 flex-1`}>
                 {/* Tab Selector */}
-                <View style={tw`bg-white dark:bg-[#1C1C1E] rounded-full p-1 flex-row mb-6 border border-zinc-200 dark:border-zinc-800 shadow-sm`}>
+                <View style={tw`bg-[#1C1C1E] rounded-full p-1 flex-row mb-6 border border-zinc-800 shadow-sm`}>
                     {(['CHAT', 'VOTES', 'LEDGER', 'MEMBERS'] as const).map(tab => (
                         <TouchableOpacity
                             key={tab}
                             onPress={() => setActiveTab(tab)}
                             style={[
                                 tw`flex-1 py-3 rounded-full items-center`,
-                                activeTab === tab ? tw`bg-zinc-100 dark:bg-white` : null,
+                                activeTab === tab ? tw`bg-white` : null,
                             ]}
                         >
                             <Text style={[
                                 tw`font-bold tracking-widest text-[9px] uppercase`,
-                                activeTab === tab ? tw`text-black` : tw`text-zinc-400 dark:text-zinc-500`,
+                                activeTab === tab ? tw`text-black` : tw`text-zinc-500`,
                             ]}>
                                 {tab === 'VOTES' && votes.length > 0 ? `Votes (${votes.length})` : tab}
                             </Text>
@@ -321,7 +319,7 @@ export default function SocialHubScreen() {
                             showsVerticalScrollIndicator={false}
                             ListEmptyComponent={
                                 <View style={tw`items-center justify-center py-16`}>
-                                    <MaterialIcons name="chat-bubble-outline" size={40} color={isDark ? '#27272A' : '#E4E4E7'} />
+                                    <MaterialIcons name="chat-bubble-outline" size={40} color="#27272A" />
                                     <Text style={tw`text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-3`}>
                                         No messages yet
                                     </Text>
@@ -340,11 +338,11 @@ export default function SocialHubScreen() {
                                             tw`max-w-[80%] p-4`,
                                             isMe
                                                 ? tw`bg-[#FF6A00] rounded-tl-3xl rounded-bl-3xl rounded-br-3xl`
-                                                : tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-tr-3xl rounded-bl-3xl rounded-br-3xl`,
+                                                : tw`bg-[#1C1C1E] border border-zinc-800 rounded-tr-3xl rounded-bl-3xl rounded-br-3xl`,
                                         ]}>
                                             <Text style={[
                                                 tw`text-base`,
-                                                isMe ? tw`text-white font-bold` : tw`text-black dark:text-white`,
+                                                isMe ? tw`text-white font-bold` : tw`text-white`,
                                             ]}>
                                                 {item.content}
                                             </Text>
@@ -355,7 +353,7 @@ export default function SocialHubScreen() {
                             style={tw`flex-1`}
                             contentContainerStyle={tw`pb-2`}
                         />
-                        <View style={tw`flex-row items-center bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-full px-4 py-2 mt-2 shadow-sm`}>
+                        <View style={tw`flex-row items-center bg-[#1C1C1E] border border-zinc-800 rounded-full px-4 py-2 mt-2 shadow-sm`}>
                             <TextInput
                                 value={text}
                                 onChangeText={setText}
@@ -399,7 +397,7 @@ export default function SocialHubScreen() {
                         <ScrollView showsVerticalScrollIndicator={false} style={tw`flex-1`}>
                             {votes.length === 0 ? (
                                 <View style={tw`items-center justify-center py-16`}>
-                                    <MaterialIcons name="how-to-vote" size={40} color={isDark ? '#27272A' : '#E4E4E7'} />
+                                    <MaterialIcons name="how-to-vote" size={40} color="#27272A" />
                                     <Text style={tw`text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-3`}>
                                         No active polls
                                     </Text>
@@ -418,7 +416,7 @@ export default function SocialHubScreen() {
                         <View style={tw`flex-row justify-between items-center mb-5 px-1`}>
                             <View>
                                 <Text style={tw`text-zinc-500 text-[10px] font-bold uppercase tracking-widest`}>Total Trip Spend</Text>
-                                <Text style={tw`text-black dark:text-white font-black text-3xl mt-0.5`}>
+                                <Text style={tw`text-white font-black text-3xl mt-0.5`}>
                                     RM {totalExpenses.toFixed(2)}
                                 </Text>
                             </View>
@@ -433,17 +431,17 @@ export default function SocialHubScreen() {
 
                         {/* Balance card — only show when there's data */}
                         {totalExpenses > 0 && users.length > 0 && (
-                            <View style={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-5 mb-5 shadow-sm`}>
+                            <View style={tw`bg-[#1C1C1E] border border-zinc-800 rounded-2xl p-5 mb-5 shadow-sm`}>
                                 <Text style={tw`text-[10px] font-bold uppercase tracking-widest text-zinc-500 mb-3`}>Your Balance</Text>
                                 <View style={tw`flex-row justify-between mb-2`}>
                                     <Text style={tw`text-zinc-500 text-sm`}>You paid</Text>
-                                    <Text style={tw`text-black dark:text-white font-bold`}>RM {myPaid.toFixed(2)}</Text>
+                                    <Text style={tw`text-white font-bold`}>RM {myPaid.toFixed(2)}</Text>
                                 </View>
                                 <View style={tw`flex-row justify-between mb-3`}>
                                     <Text style={tw`text-zinc-500 text-sm`}>Your share ({users.length} {users.length === 1 ? 'person' : 'people'})</Text>
-                                    <Text style={tw`text-black dark:text-white font-bold`}>RM {fairShare.toFixed(2)}</Text>
+                                    <Text style={tw`text-white font-bold`}>RM {fairShare.toFixed(2)}</Text>
                                 </View>
-                                <View style={tw`h-[1px] bg-zinc-100 dark:bg-zinc-800 mb-3`} />
+                                <View style={tw`h-[1px] bg-zinc-800 mb-3`} />
                                 <View style={tw`flex-row justify-between items-center`}>
                                     <Text style={tw`text-zinc-400 text-[10px] font-bold uppercase tracking-widest`}>Net</Text>
                                     <View style={tw`items-end`}>
@@ -465,7 +463,7 @@ export default function SocialHubScreen() {
                         <ScrollView showsVerticalScrollIndicator={false} style={tw`flex-1`}>
                             {ledger.length === 0 ? (
                                 <View style={tw`items-center justify-center py-16`}>
-                                    <MaterialIcons name="receipt-long" size={40} color={isDark ? '#27272A' : '#E4E4E7'} />
+                                    <MaterialIcons name="receipt-long" size={40} color="#27272A" />
                                     <Text style={tw`text-zinc-400 font-bold uppercase tracking-widest text-[10px] mt-3`}>No expenses yet</Text>
                                     <TouchableOpacity
                                         onPress={() => setShowAddExpense(true)}
@@ -478,9 +476,9 @@ export default function SocialHubScreen() {
                                 ledger.map(item => {
                                     const isMe = item.userId === myId;
                                     return (
-                                        <View key={item.id} style={tw`bg-white dark:bg-[#1C1C1E] border border-zinc-200 dark:border-zinc-800 rounded-2xl px-5 py-4 mb-3 flex-row items-center justify-between shadow-sm`}>
+                                        <View key={item.id} style={tw`bg-[#1C1C1E] border border-zinc-800 rounded-2xl px-5 py-4 mb-3 flex-row items-center justify-between shadow-sm`}>
                                             <View style={tw`flex-1 mr-3`}>
-                                                <Text style={tw`text-black dark:text-white font-bold text-base`} numberOfLines={1}>
+                                                <Text style={tw`text-white font-bold text-base`} numberOfLines={1}>
                                                     {item.description}
                                                 </Text>
                                                 <Text style={tw`text-zinc-400 text-[10px] uppercase tracking-widest mt-0.5`}>
@@ -489,7 +487,7 @@ export default function SocialHubScreen() {
                                             </View>
                                             <Text style={[
                                                 tw`font-black text-lg`,
-                                                isMe ? tw`text-[#FF6A00]` : tw`text-black dark:text-white`,
+                                                isMe ? tw`text-[#FF6A00]` : tw`text-white`,
                                             ]}>
                                                 RM {item.amount.toFixed(2)}
                                             </Text>
@@ -504,7 +502,7 @@ export default function SocialHubScreen() {
                 {/* ── MEMBERS ── */}
                 {activeTab === 'MEMBERS' && (
                     <View style={tw`flex-1`}>
-                        <Text style={tw`text-black dark:text-white text-lg font-black tracking-widest uppercase mb-4 mt-2 px-1`}>
+                        <Text style={tw`text-white text-lg font-black tracking-widest uppercase mb-4 mt-2 px-1`}>
                             Live Convoy ({users.length})
                         </Text>
                         <ScrollView showsVerticalScrollIndicator={false} style={tw`flex-1`}>
@@ -516,18 +514,18 @@ export default function SocialHubScreen() {
                                 };
 
                                 return (
-                                    <View key={user.id} style={tw`bg-white dark:bg-[#1C1C1E] rounded-3xl p-5 border border-zinc-200 dark:border-zinc-800 mb-3 flex-row justify-between items-center shadow-sm`}>
+                                    <View key={user.id} style={tw`bg-[#1C1C1E] rounded-3xl p-5 border border-zinc-800 mb-3 flex-row justify-between items-center shadow-sm`}>
                                         <View style={tw`flex-row items-center gap-3`}>
                                             <View style={[tw`w-10 h-10 rounded-2xl items-center justify-center`, { backgroundColor: user.color }]}>
                                                 <MaterialIcons name="car-repair" size={24} color="black" />
                                             </View>
                                             <View>
-                                                <Text style={tw`text-black dark:text-white font-bold text-base`}>
+                                                <Text style={tw`text-white font-bold text-base`}>
                                                     {user.name} {isMe ? '(You)' : ''}
                                                 </Text>
                                                 <View style={tw`flex-row items-center gap-2`}>
                                                     <View style={[tw`w-1.5 h-1.5 rounded-full`, { backgroundColor: user.status === 'Moving' ? '#10B981' : '#EF4444' }]} />
-                                                    <Text style={tw`text-zinc-500 text-[10px] font-bold uppercase tracking-widest`}>
+                                                    <Text style={tw`text-zinc-400 text-[10px] font-bold uppercase tracking-widest`}>
                                                         {user.status} • {user.speed} KM/H
                                                     </Text>
                                                 </View>

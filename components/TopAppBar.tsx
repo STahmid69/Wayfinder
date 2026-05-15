@@ -20,12 +20,12 @@ export default function TopAppBar({ customStyle }: TopAppBarProps) {
     };
 
     return (
-        <SafeAreaView edges={['top']} style={tw`${customStyle || 'absolute top-0 w-full z-50 bg-white/90 dark:bg-[#121212]/90 shadow-sm'}`}>
+        <SafeAreaView edges={['top']} style={tw`${customStyle || 'absolute top-0 w-full z-50 bg-[#121212]/90 shadow-sm'}`}>
             <View style={tw`flex-row justify-between items-center px-6 h-16 w-full mt-2`}>
                 {/* Logo */}
                 <View style={tw`flex-row items-center gap-2`}>
                     <MaterialIcons name="explore" size={26} color="#FF6A00" />
-                    <Text style={tw`text-xl font-bold italic text-black dark:text-white tracking-widest`}>WAYFINDER</Text>
+                    <Text style={tw`text-xl font-bold italic text-white tracking-widest`}>WAYFINDER</Text>
                 </View>
 
                 {/* Right side */}
