@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View, useColorScheme } from 'react-native';
 import TopAppBar from '../../components/TopAppBar';
 import { useConvoy } from '../../contexts/ConvoyContext';
+import { CURRENCY_SYMBOL } from '../../constants/currency';
 import tw from '../../lib/tailwind';
 
 export default function LedgerScreen() {
@@ -37,7 +38,7 @@ export default function LedgerScreen() {
             </View>
             <View style={tw`items-end`}>
                 <Text style={tw`text-[#FF6A00] font-black text-lg tracking-tighter`}>
-                    RM {item.amount.toFixed(2)}
+                    {CURRENCY_SYMBOL} {item.amount.toFixed(2)}
                 </Text>
             </View>
         </View>
@@ -69,7 +70,7 @@ export default function LedgerScreen() {
                     <Text style={tw`text-zinc-500 dark:text-zinc-400 font-black text-[10px] uppercase tracking-[4px] mb-2`}>Total Expenses</Text>
                     <View style={tw`flex-row items-baseline`}>
                         <Text style={tw`text-black dark:text-white font-black text-5xl tracking-tighter`}>
-                            RM {totalAmount.toFixed(2)}
+                            {CURRENCY_SYMBOL} {totalAmount.toFixed(2)}
                         </Text>
                     </View>
                     

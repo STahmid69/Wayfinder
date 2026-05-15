@@ -12,7 +12,10 @@
       "bundleIdentifier": "com.shababtahmid18.wayfinderapp",
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Wayfinder needs access to your microphone so you can talk to your convoy."
+        "NSMicrophoneUsageDescription": "Wayfinder needs access to your microphone so you can talk to your convoy.",
+        "NSLocationWhenInUseUsageDescription": "Wayfinder uses your location to show your convoy where you are on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Wayfinder tracks your location in the background so your convoy always sees where you are, even when the app is minimized.",
+        "UIBackgroundModes": ["location"]
       }
     },
     "android": {
