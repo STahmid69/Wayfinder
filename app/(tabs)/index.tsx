@@ -120,7 +120,8 @@ function MapFAB({ onSOS, onHazard }: { onSOS: () => void; onHazard: () => void }
 function DrawerRow({ user, isMe, myId, me }: { user: any; isMe: boolean; myId: string; me: any }) {
   const initials = user.name.split(/\s+/).map((p: string) => p[0]).slice(0, 2).join('').toUpperCase();
   const isStale = !isMe && Date.now() - user.lastSeen > 60000;
-  const dist = isMe || !me ? null : haversineKm(me.lat, me.lng, user.lat, user.lng);
+  const hasGps = user.lat !== 0 || user.lng !== 0;
+  const dist = isMe || !me || !hasGps ? null : haversineKm(me.lat, me.lng, user.lat, user.lng);
 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color, opacity: isStale ? 0.5 : 1 }}>
@@ -152,6 +153,8 @@ function DrawerRow({ user, isMe, myId, me }: { user: any; isMe: boolean; myId: s
         </Text>
         {isMe ? (
           <Text style={{ fontSize: 9, color: '#71717A', marginTop: 1 }}>You</Text>
+        ) : !hasGps ? (
+          <Text style={{ fontSize: 9, color: '#F59E0B', marginTop: 1 }}>No GPS</Text>
         ) : dist !== null ? (
           <Text style={{ fontSize: 9, color: '#71717A', marginTop: 1 }}>{dist.toFixed(1)} km away</Text>
         ) : null}
@@ -171,18 +174,21 @@ export default function ConvoyRadarScreen() {
   const nav = useNavigation();
 
   const me = users.find(u => u.id === myId);
-  const centerLat = me?.lat ?? 3.139;
-  const centerLng = me?.lng ?? 101.6869;
+  const meHasGps = !!(me && (me.lat !== 0 || me.lng !== 0));
+  // Use || so that lat:0 falls through to the fallback (0 is falsy, ?? would keep it)
+  const centerLat = me?.lat || 3.139;
+  const centerLng = me?.lng || 101.6869;
 
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [showHazardPicker, setShowHazardPicker] = useState(false);
 
   useEffect(() => {
-    if (me && !hasCenteredRef.current && mapRef.current) {
+    // Only lock-in the auto-center once we have a real GPS fix (not 0,0)
+    if (me && meHasGps && !hasCenteredRef.current && mapRef.current) {
       hasCenteredRef.current = true;
       mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
     }
-  }, [me?.lat, me?.lng]);
+  }, [me?.lat, me?.lng, meHasGps]);
 
   useEffect(() => {
     if (me && !nav.origin && nav.mode === 'planning') {
@@ -206,7 +212,7 @@ export default function ConvoyRadarScreen() {
   }, [nav.route]);
 
   const centerOnUser = () => {
-    if (me && mapRef.current) {
+    if (me && meHasGps && mapRef.current) {
       mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
     }
   };
@@ -262,7 +268,7 @@ export default function ConvoyRadarScreen() {
           {nav.origin && <RouteMarker coordinate={{ latitude: nav.origin.lat, longitude: nav.origin.lng }} type="origin" label={nav.originLabel} />}
           {nav.destination && <RouteMarker coordinate={{ latitude: nav.destination.lat, longitude: nav.destination.lng }} type="destination" label={nav.destinationLabel} />}
 
-          {users.map(user => (
+          {users.filter(u => u.lat !== 0 || u.lng !== 0).map(user => (
             <Marker
               key={user.id}
               coordinate={{ latitude: user.lat, longitude: user.lng }}
@@ -421,7 +427,8 @@ export default function ConvoyRadarScreen() {
                 {users.map(user => {
                   const isMe = user.id === myId;
                   const isStale = !isMe && Date.now() - user.lastSeen > 60000;
-                  const dist = isMe || !me ? null : haversineKm(me.lat, me.lng, user.lat, user.lng);
+                  const hasGps = user.lat !== 0 || user.lng !== 0;
+                  const dist = isMe || !me || !hasGps ? null : haversineKm(me.lat, me.lng, user.lat, user.lng);
                   return (
                     <View key={user.id} style={{ width: 150, flexDirection: 'column', padding: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color, opacity: isStale ? 0.5 : 1 }}>
                       <Text style={{ fontSize: 12, fontWeight: '600', color: WF.text }} numberOfLines={1}>
@@ -436,6 +443,8 @@ export default function ConvoyRadarScreen() {
                       </Text>
                       {isMe ? (
                         <Text style={{ fontSize: 9, color: '#71717A', marginTop: 2 }}>You</Text>
+                      ) : !hasGps ? (
+                        <Text style={{ fontSize: 9, color: '#F59E0B', marginTop: 2 }}>No GPS</Text>
                       ) : dist !== null ? (
                         <Text style={{ fontSize: 9, color: '#71717A', marginTop: 2 }}>{dist.toFixed(1)} km away</Text>
                       ) : null}
