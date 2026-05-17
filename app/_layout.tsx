@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '../contexts/AuthContext';
 import { ConvoyProvider, useConvoy } from '../contexts/ConvoyContext';
 import { NavigationProvider } from '../contexts/NavigationContext';
+import Toast from '../components/Toast';
 
 function WebWrapper({ children }: { children: React.ReactNode }) {
     if (Platform.OS !== 'web') return <>{children}</>;
@@ -13,10 +14,11 @@ function WebWrapper({ children }: { children: React.ReactNode }) {
         <View style={{
             flex: 1,
             backgroundColor: '#000',
+            height: '100vh' as any,
             // Using margin: '0 auto' for more stable centering of absolute children on web
         }}>
             <style dangerouslySetInnerHTML={{ __html: `
-                body { background-color: #000; overflow: hidden; }
+                body { background-color: #000; margin: 0; padding: 0; overflow: hidden; height: 100vh; }
                 /* Custom scrollbar for web */
                 ::-webkit-scrollbar { width: 6px; }
                 ::-webkit-scrollbar-track { background: transparent; }
@@ -60,12 +62,15 @@ function InitialLayout() {
     }, [isLoaded, myName, convoyId, pathname]);
 
     return (
-        <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade' }}>
-            <Stack.Screen name="onboarding" />
-            <Stack.Screen name="lobby" />
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen name="trip-summary" options={{ animation: 'slide_from_bottom' }} />
-        </Stack>
+        <>
+            <Stack screenOptions={{ headerShown: false, animation: Platform.OS === 'web' ? 'none' : 'fade' }}>
+                <Stack.Screen name="onboarding" />
+                <Stack.Screen name="lobby" />
+                <Stack.Screen name="(tabs)" />
+                <Stack.Screen name="trip-summary" options={{ animation: 'slide_from_bottom' }} />
+            </Stack>
+            <Toast />
+        </>
     );
 }
 

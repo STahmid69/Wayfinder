@@ -29,6 +29,68 @@ const STATUS_OPTIONS: { key: DriverStatus; label: string; emoji: string; dot: st
   { key: 'pulling_over', label: 'Pulled Over', emoji: '🅿️', dot: '#888888' },
 ];
 
+function BreathingRing() {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(scale, { toValue: 1.08, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+        Animated.timing(scale, { toValue: 1.0, duration: 1000, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  return (
+    <Animated.View style={{
+      position: 'absolute',
+      width: 240, height: 240, borderRadius: 120,
+      borderWidth: 1.5,
+      borderColor: WF.amber + '55',
+      transform: [{ scale }],
+    }} />
+  );
+}
+
+function SoundWaveBars() {
+  const bar1 = useRef(new Animated.Value(8)).current;
+  const bar2 = useRef(new Animated.Value(20)).current;
+  const bar3 = useRef(new Animated.Value(12)).current;
+
+  useEffect(() => {
+    const makeAnim = (val: Animated.Value, min: number, max: number, duration: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(val, { toValue: max, duration, useNativeDriver: false, easing: Easing.inOut(Easing.ease) }),
+          Animated.timing(val, { toValue: min, duration, useNativeDriver: false, easing: Easing.inOut(Easing.ease) }),
+        ])
+      );
+    const a1 = makeAnim(bar1, 8, 28, 380);
+    const a2 = makeAnim(bar2, 14, 40, 280);
+    const a3 = makeAnim(bar3, 8, 32, 330);
+    a1.start(); a2.start(); a3.start();
+    return () => { a1.stop(); a2.stop(); a3.stop(); };
+  }, []);
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: 48, marginBottom: 12 }}>
+      {([{ val: bar1, w: 4 }, { val: bar2, w: 5 }, { val: bar3, w: 4 }] as { val: Animated.Value; w: number }[]).map(({ val, w }, i) => (
+        <Animated.View
+          key={i}
+          style={{
+            width: w,
+            height: val,
+            borderRadius: w / 2,
+            backgroundColor: WF.amber,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
 function PulseRing({ active, delay = 0, size = 220 }: { active: boolean; delay?: number; size?: number }) {
   const opacity = useRef(new Animated.Value(0.7)).current;
   const scale = useRef(new Animated.Value(1)).current;
@@ -216,7 +278,9 @@ export default function PttScreen() {
 
         {/* ── PTT Button ───────────────────────────────────────────── */}
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          {isTalking && <SoundWaveBars />}
           <View style={{ width: 280, height: 280, alignItems: 'center', justifyContent: 'center' }}>
+            {!isTalking && <BreathingRing />}
             <PulseRing active={isTalking} delay={0} />
             <PulseRing active={isTalking} delay={isTalking ? 350 : 700} />
             {!isTalking && <PulseRing active={false} delay={1400} />}

@@ -117,10 +117,13 @@ function MapFAB({ onSOS, onHazard }: { onSOS: () => void; onHazard: () => void }
 }
 
 // Member row in convoy drawer
-function DrawerRow({ user, isMe, myId }: { user: any; isMe: boolean; myId: string }) {
+function DrawerRow({ user, isMe, myId, me }: { user: any; isMe: boolean; myId: string; me: any }) {
   const initials = user.name.split(/\s+/).map((p: string) => p[0]).slice(0, 2).join('').toUpperCase();
+  const isStale = !isMe && Date.now() - user.lastSeen > 60000;
+  const dist = isMe || !me ? null : haversineKm(me.lat, me.lng, user.lat, user.lng);
+
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color, opacity: isStale ? 0.5 : 1 }}>
       <View style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: user.color + '20', borderWidth: 1, borderColor: user.color + '55', alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ fontSize: 10, fontWeight: '700', color: user.color, letterSpacing: 0.5 }}>{initials}</Text>
       </View>
@@ -135,6 +138,9 @@ function DrawerRow({ user, isMe, myId }: { user: any; isMe: boolean; myId: strin
             </View>
           )}
         </View>
+        {isStale && (
+          <Text style={{ fontSize: 9, color: '#FBBF24', marginTop: 1 }}>⚠ Signal lost</Text>
+        )}
         <Text style={{ fontSize: 10, color: WF.textMut, letterSpacing: 0.2 }}>{user.status}</Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
@@ -144,6 +150,11 @@ function DrawerRow({ user, isMe, myId }: { user: any; isMe: boolean; myId: strin
         <Text style={{ fontSize: 9, color: user.speed > 0 ? WF.green : WF.textDim, letterSpacing: 1, textTransform: 'uppercase' }}>
           {user.speed > 0 ? '▲ MOVING' : '■ STOPPED'}
         </Text>
+        {isMe ? (
+          <Text style={{ fontSize: 9, color: '#71717A', marginTop: 1 }}>You</Text>
+        ) : dist !== null ? (
+          <Text style={{ fontSize: 9, color: '#71717A', marginTop: 1 }}>{dist.toFixed(1)} km away</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -198,6 +209,17 @@ export default function ConvoyRadarScreen() {
     if (me && mapRef.current) {
       mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
     }
+  };
+
+  const fitAllCars = () => {
+    if (!mapRef.current || users.length < 2) return;
+    const validUsers = users.filter(u => u.lat !== 0 || u.lng !== 0);
+    if (validUsers.length < 2) return;
+    const lats = validUsers.map(u => u.lat);
+    const lngs = validUsers.map(u => u.lng);
+    const sw: [number, number] = [Math.min(...lats), Math.min(...lngs)];
+    const ne: [number, number] = [Math.max(...lats), Math.max(...lngs)];
+    mapRef.current.fitBounds([sw, ne], { padding: 80 });
   };
 
   const handleSOS = () => {
@@ -339,7 +361,7 @@ export default function ConvoyRadarScreen() {
         </View>
       )}
 
-      {/* Side controls: center + compass */}
+      {/* Side controls: center + fit-all + compass */}
       {!isNavigating && (
         <View style={{ position: 'absolute', left: 14, bottom: Platform.OS === 'web' ? 230 : 240, zIndex: 30, gap: 8 }}>
           <TouchableOpacity onPress={centerOnUser}>
@@ -347,6 +369,13 @@ export default function ConvoyRadarScreen() {
               <MaterialIcons name="my-location" size={18} color={WF.cyan} />
             </GlassPanel>
           </TouchableOpacity>
+          {users.length > 1 && (
+            <TouchableOpacity onPress={fitAllCars}>
+              <GlassPanel style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name="car-multiple" size={18} color={WF.amber} />
+              </GlassPanel>
+            </TouchableOpacity>
+          )}
           <GlassPanel style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 9, fontWeight: '700', color: WF.amber, letterSpacing: 1 }}>N</Text>
             <Text style={{ fontSize: 8, color: WF.textDim }}>↑</Text>
@@ -389,25 +418,38 @@ export default function ConvoyRadarScreen() {
                 </View>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row', paddingBottom: 4 }}>
-                {users.map(user => (
-                  <View key={user.id} style={{ width: 150, flexDirection: 'column', padding: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color }}>
-                    <Text style={{ fontSize: 12, fontWeight: '600', color: WF.text }} numberOfLines={1}>
-                      {user.id === myId ? 'You' : user.name}
-                    </Text>
-                    <Text style={{ fontSize: 9, color: WF.textMut, marginTop: 1 }}>{user.status}</Text>
-                    <Text style={{ fontSize: 16, fontWeight: '700', color: user.speed > 0 ? WF.text : WF.textDim, marginTop: 4 }}>
-                      {user.speed}<Text style={{ fontSize: 8, color: WF.textMut }}> KM/H</Text>
-                    </Text>
-                    {user.id !== myId && (
-                      <TouchableOpacity
-                        onPress={() => Linking.openURL(`https://www.waze.com/ul?ll=${user.lat},${user.lng}&navigate=yes`)}
-                        style={{ marginTop: 6, backgroundColor: 'rgba(0,212,255,0.1)', borderWidth: 1, borderColor: WF.cyan + '55', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' }}
-                      >
-                        <Text style={{ fontSize: 9, color: WF.cyan, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Navigate</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                {users.map(user => {
+                  const isMe = user.id === myId;
+                  const isStale = !isMe && Date.now() - user.lastSeen > 60000;
+                  const dist = isMe || !me ? null : haversineKm(me.lat, me.lng, user.lat, user.lng);
+                  return (
+                    <View key={user.id} style={{ width: 150, flexDirection: 'column', padding: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color, opacity: isStale ? 0.5 : 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: WF.text }} numberOfLines={1}>
+                        {isMe ? 'You' : user.name}
+                      </Text>
+                      {isStale && (
+                        <Text style={{ fontSize: 9, color: '#FBBF24', marginTop: 1 }}>⚠ Signal lost</Text>
+                      )}
+                      <Text style={{ fontSize: 9, color: WF.textMut, marginTop: 1 }}>{user.status}</Text>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: user.speed > 0 ? WF.text : WF.textDim, marginTop: 4 }}>
+                        {user.speed}<Text style={{ fontSize: 8, color: WF.textMut }}> KM/H</Text>
+                      </Text>
+                      {isMe ? (
+                        <Text style={{ fontSize: 9, color: '#71717A', marginTop: 2 }}>You</Text>
+                      ) : dist !== null ? (
+                        <Text style={{ fontSize: 9, color: '#71717A', marginTop: 2 }}>{dist.toFixed(1)} km away</Text>
+                      ) : null}
+                      {!isMe && (
+                        <TouchableOpacity
+                          onPress={() => Linking.openURL(`https://www.waze.com/ul?ll=${user.lat},${user.lng}&navigate=yes`)}
+                          style={{ marginTop: 6, backgroundColor: 'rgba(0,212,255,0.1)', borderWidth: 1, borderColor: WF.cyan + '55', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' }}
+                        >
+                          <Text style={{ fontSize: 9, color: WF.cyan, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Navigate</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
               </ScrollView>
             </GlassPanel>
           </View>
@@ -437,7 +479,7 @@ export default function ConvoyRadarScreen() {
               </View>
               <BottomSheetScrollView contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
                 {users.map(user => (
-                  <DrawerRow key={user.id} user={user} isMe={user.id === myId} myId={myId} />
+                  <DrawerRow key={user.id} user={user} isMe={user.id === myId} myId={myId} me={me} />
                 ))}
               </BottomSheetScrollView>
             </BottomSheetView>

@@ -15,9 +15,7 @@ function TabIcon({ name, focused, size = 24 }: { name: any; focused: boolean; si
   return (
     <View style={{ alignItems: 'center', gap: 3 }}>
       <MaterialIcons name={name} size={size} color={focused ? AMBER : INACTIVE} />
-      {focused && (
-        <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: AMBER }} />
-      )}
+      <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: focused ? AMBER : 'transparent' }} />
     </View>
   );
 }

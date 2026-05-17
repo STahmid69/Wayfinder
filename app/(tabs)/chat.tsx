@@ -1,4 +1,4 @@
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import React, { useRef, useState } from 'react';
 import {
   Alert, FlatList, KeyboardAvoidingView, Linking,
@@ -237,8 +237,9 @@ export default function SocialHubScreen() {
             }
             ListEmptyComponent={
               <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }}>
-                <MaterialIcons name="chat-bubble-outline" size={40} color="rgba(255,255,255,0.08)" />
-                <Text style={{ color: WF.textDim, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 2, fontSize: 10, marginTop: 12 }}>No messages yet</Text>
+                <MaterialCommunityIcons name="message-outline" size={52} color="#FF6A00" />
+                <Text style={{ color: WF.text, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 13, marginTop: 16 }}>No messages yet</Text>
+                <Text style={{ color: WF.textMut, fontSize: 12, marginTop: 8, textAlign: 'center' }}>Be the first to say something 👋</Text>
               </View>
             }
             renderItem={({ item }) => {
@@ -298,8 +299,9 @@ export default function SocialHubScreen() {
           </View>
           {votes.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 60 }}>
-              <MaterialIcons name="how-to-vote" size={40} color="rgba(255,255,255,0.08)" />
-              <Text style={{ color: WF.textDim, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 2, fontSize: 10, marginTop: 12 }}>No active polls</Text>
+              <MaterialCommunityIcons name="poll" size={52} color="#FF6A00" />
+              <Text style={{ color: WF.text, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 13, marginTop: 16 }}>No votes yet</Text>
+              <Text style={{ color: WF.textMut, fontSize: 12, marginTop: 8, textAlign: 'center' }}>Propose something to the convoy</Text>
             </View>
           ) : votes.map(vote => <VoteCard key={vote.id} vote={vote} />)}
         </ScrollView>
@@ -332,8 +334,9 @@ export default function SocialHubScreen() {
           </TouchableOpacity>
           {ledger.length === 0 ? (
             <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-              <MaterialIcons name="receipt-long" size={40} color="rgba(255,255,255,0.08)" />
-              <Text style={{ color: WF.textDim, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 2, fontSize: 10, marginTop: 12 }}>No expenses yet</Text>
+              <MaterialCommunityIcons name="receipt-outline" size={52} color="#FF6A00" />
+              <Text style={{ color: WF.text, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 13, marginTop: 16 }}>No expenses yet</Text>
+              <Text style={{ color: WF.textMut, fontSize: 12, marginTop: 8, textAlign: 'center' }}>Track shared costs here</Text>
             </View>
           ) : [...ledger].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(item => {
             const isMe = item.userId === myId;

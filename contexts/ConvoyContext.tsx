@@ -4,6 +4,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { showToast } from '../components/Toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -217,6 +218,8 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     const pushTokensRef = useRef<Record<string, string>>({});
     const myPushTokenRef = useRef('');
     const totalDistanceRef = useRef(0);
+    const prevUserIdsRef = useRef<string[]>([]);
+    const initialSyncDoneRef = useRef(false);
 
     useEffect(() => { myNameRef.current = myName; }, [myName]);
     useEffect(() => { myColorRef.current = myColor; }, [myColor]);
@@ -319,6 +322,10 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         if (!convoyId || !myId) return;
         if (channelRef.current) supabase.removeChannel(channelRef.current);
 
+        // Reset join-detection state for this convoy session
+        prevUserIdsRef.current = [];
+        initialSyncDoneRef.current = false;
+
         const channel = supabase.channel(`convoy:${convoyId}`, {
             config: {
                 broadcast: { ack: true, self: true },
@@ -334,7 +341,22 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
                         if (p.id) membersMap.set(p.id, p as ConvoyMember);
                     });
                 });
-                setUsers(Array.from(membersMap.values()));
+                const newMembers = Array.from(membersMap.values());
+
+                // Detect new joins after the initial sync (skip first sync to avoid toasting existing members)
+                if (initialSyncDoneRef.current) {
+                    const prevIds = prevUserIdsRef.current;
+                    newMembers.forEach(member => {
+                        if (member.id !== myIdRef.current && !prevIds.includes(member.id)) {
+                            showToast(`${member.name} joined the convoy`, '🚗', '#FF6A00');
+                        }
+                    });
+                } else {
+                    initialSyncDoneRef.current = true;
+                }
+                prevUserIdsRef.current = newMembers.map(m => m.id);
+
+                setUsers(newMembers);
             })
             .on('broadcast', { event: 'chat' }, ({ payload }: { payload: Message }) => {
                 setMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
@@ -357,13 +379,18 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
             .on('broadcast', { event: 'ledger' }, ({ payload }: { payload: LedgerItem }) => {
                 setLedger(prev => prev.some(i => i.id === payload.id) ? prev : [payload, ...prev]);
             })
-            .on('broadcast', { event: 'ptt' }, ({ payload }: { payload: { userId: string; isTalking: boolean } }) => {
+            .on('broadcast', { event: 'ptt' }, ({ payload }: { payload: { userId: string; userName?: string; isTalking: boolean } }) => {
+                if (payload.isTalking && payload.userId !== myIdRef.current) {
+                    showToast(`${payload.userName ?? 'Someone'} is transmitting`, '🎙', '#FF6A00');
+                }
                 setWhoIsTalking(payload.isTalking ? payload.userId : null);
             })
             .on('broadcast', { event: 'hazard' }, ({ payload }: { payload: HazardPin }) => {
+                showToast(`Hazard reported by ${payload.addedByName}`, '⚠️', '#FFC400');
                 setHazardPins(prev => prev.some(p => p.id === payload.id) ? prev : [...prev, payload]);
             })
             .on('broadcast', { event: 'sos' }, ({ payload }: { payload: SOSAlert }) => {
+                showToast(`${payload.userName} sent an SOS!`, '🚨', '#FF2D55');
                 setSOSAlerts(prev => prev.some(a => a.id === payload.id) ? prev : [...prev, payload]);
             })
             .on('broadcast', { event: 'sos_dismiss' }, ({ payload }: { payload: { sosId: string } }) => {
@@ -488,7 +515,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     };
 
     const endConvoy = async () => {
-        // Save trip to history
+        // 1. Capture data before clearing
         const duration = tripStartTime ? Math.round((Date.now() - tripStartTime) / 60000) : 0;
         const past: PastConvoy = {
             id: genId(),
@@ -501,9 +528,25 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
             expensesTotal: ledger.reduce((s, i) => s + i.amount, 0),
             votesCount: votes.length,
         };
+
+        // 2. Save trip to history
         const existing: PastConvoy[] = JSON.parse(await AsyncStorage.getItem('wayfinder_past_convoys') || '[]');
         await AsyncStorage.setItem('wayfinder_past_convoys', JSON.stringify([past, ...existing].slice(0, 20)));
-        // We don't call leaveConvoy() here anymore to avoid immediate redirect
+        
+        // 3. Clear current convoy state (similar to leaveConvoy)
+        if (Platform.OS === 'web') {
+            window.localStorage.removeItem('wayfinder_convoy_id');
+            window.localStorage.removeItem('wayfinder_trip_start');
+            window.localStorage.removeItem('wayfinder_total_distance');
+        }
+        if (channelRef.current) supabase.removeChannel(channelRef.current);
+        if (locationSubRef.current?.remove) locationSubRef.current.remove();
+        
+        setConvoyId(null);
+        setUsers([]); setMessages([]); setVotes([]); setLedger([]);
+        setHazardPins([]); setSOSAlerts([]);
+        setTripStartTime(null);
+        setTotalDistanceKm(0);
     };
 
     // ─── Chat ────────────────────────────────────────────────────────────────
