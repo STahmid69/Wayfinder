@@ -8,10 +8,8 @@ import { ConvoyRole, useConvoy } from '../../contexts/ConvoyContext';
 const WF = {
   bg: '#0A0A0F',
   panel: '#141418',
-  panelHi: '#1A1A20',
   line: 'rgba(255,255,255,0.06)',
   amber: '#FF6A00',
-  amberHi: '#FF8A2A',
   cyan: '#00D4FF',
   green: '#00FF88',
   red: '#FF2D55',
@@ -22,140 +20,19 @@ const WF = {
   textDim: 'rgba(244,244,246,0.38)',
 };
 
+const MAX_SPEED = 180;
+
 function formatDuration(startTime: number | null): string {
-  if (!startTime) return '0:00';
+  if (!startTime) return '0m';
   const mins = Math.floor((Date.now() - startTime) / 60000);
   if (mins < 60) return `${mins}m`;
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
-function GlassCard({ children, style }: { children: React.ReactNode; style?: any }) {
-  return (
-    <View style={[{
-      backgroundColor: 'rgba(20,20,24,0.8)',
-      borderWidth: 1,
-      borderColor: WF.line,
-      borderRadius: 18,
-    }, style]}>
-      {children}
-    </View>
-  );
-}
-
-function StatCard({ label, value, unit, accent = WF.text }: { label: string; value: string; unit: string; accent?: string }) {
-  return (
-    <GlassCard style={{ padding: 14, flex: 1 }}>
-      <Text style={{ fontSize: 9, letterSpacing: 2, color: WF.textMut, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>
-        {label}
-      </Text>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-        <Text style={{ fontSize: 28, fontWeight: '800', color: accent, letterSpacing: -1, lineHeight: 32 }}>
-          {value}
-        </Text>
-        <Text style={{ fontSize: 10, color: WF.textMut, letterSpacing: 1.2, fontWeight: '600' }}>
-          {unit}
-        </Text>
-      </View>
-    </GlassCard>
-  );
-}
-
-function SpeedDial({ speed }: { speed: number }) {
-  const max = 180;
-  const pct = Math.min(speed / max, 1);
-  const ticks = Array.from({ length: 19 }, (_, i) => i);
-
-  return (
-    <View style={{ alignItems: 'center', justifyContent: 'center', width: 240, height: 240 }}>
-      {/* Outer ring */}
-      <View style={{
-        position: 'absolute',
-        width: 220, height: 220, borderRadius: 110,
-        borderWidth: 12, borderColor: 'rgba(255,255,255,0.05)',
-      }} />
-      {/* Amber progress ring (simulated with a glow overlay) */}
-      <View style={{
-        position: 'absolute',
-        width: 220, height: 220, borderRadius: 110,
-        borderWidth: 12,
-        borderColor: WF.amber,
-        opacity: 0.15,
-      }} />
-      {/* Tick marks as colored dots */}
-      {ticks.map(i => {
-        const angle = (-225 + (i / 18) * 270) * (Math.PI / 180);
-        const r = 95;
-        const x = 120 + r * Math.cos(angle);
-        const y = 120 + r * Math.sin(angle);
-        const filled = i / 18 <= pct;
-        const major = i % 3 === 0;
-        return (
-          <View key={i} style={{
-            position: 'absolute',
-            width: major ? 8 : 4,
-            height: major ? 8 : 4,
-            borderRadius: major ? 4 : 2,
-            backgroundColor: filled ? WF.amber : 'rgba(255,255,255,0.15)',
-            left: x - (major ? 4 : 2),
-            top: y - (major ? 4 : 2),
-          }} />
-        );
-      })}
-      {/* Center content */}
-      <Text style={{ fontSize: 9, fontWeight: '700', color: WF.textMut, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>
-        CURRENT
-      </Text>
-      <Text style={{ fontSize: 56, fontWeight: '800', color: WF.text, letterSpacing: -2, lineHeight: 58 }}>
-        {speed}
-      </Text>
-      <Text style={{ fontSize: 10, fontWeight: '700', color: WF.amber, letterSpacing: 2.5, textTransform: 'uppercase' }}>
-        KM/H
-      </Text>
-    </View>
-  );
-}
-
-function ReplayMap() {
-  return (
-    <GlassCard style={{ padding: 12 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
-        <Text style={{ fontSize: 9, letterSpacing: 2, color: WF.textMut, fontWeight: '700', textTransform: 'uppercase' }}>
-          ROUTE · SESSION
-        </Text>
-        <Text style={{ fontSize: 9, color: WF.cyan, letterSpacing: 1, fontWeight: '600' }}>LIVE ▸</Text>
-      </View>
-      {/* Decorative map thumbnail */}
-      <View style={{ height: 80, borderRadius: 10, backgroundColor: '#0D1117', overflow: 'hidden', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
-        {/* Grid lines */}
-        {[0.25, 0.5, 0.75].map(f => (
-          <View key={f} style={{ position: 'absolute', left: 0, right: 0, top: `${f * 100}%` as any, height: 1, backgroundColor: 'rgba(255,255,255,0.03)' }} />
-        ))}
-        {[0.25, 0.5, 0.75].map(f => (
-          <View key={f} style={{ position: 'absolute', top: 0, bottom: 0, left: `${f * 100}%` as any, width: 1, backgroundColor: 'rgba(255,255,255,0.03)' }} />
-        ))}
-        {/* Route line */}
-        <View style={{ position: 'absolute', left: 20, right: 20, height: 3, backgroundColor: 'rgba(255,106,0,0.2)', borderRadius: 2 }} />
-        <View style={{ position: 'absolute', left: 20, right: '35%', height: 3, backgroundColor: WF.amber, borderRadius: 2, opacity: 0.85 }} />
-        {/* Start dot */}
-        <View style={{ position: 'absolute', left: 16, width: 8, height: 8, borderRadius: 4, backgroundColor: WF.green, borderWidth: 1.5, borderColor: WF.bg }} />
-        {/* End/current dot */}
-        <View style={{ position: 'absolute', right: 16, width: 8, height: 8, borderRadius: 4, backgroundColor: WF.amber, borderWidth: 1.5, borderColor: WF.bg }} />
-        {/* Labels */}
-        <Text style={{ position: 'absolute', bottom: 6, left: 28, fontSize: 8, color: WF.green, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' }}>
-          START
-        </Text>
-        <Text style={{ position: 'absolute', bottom: 6, right: 8, fontSize: 8, color: WF.amber, fontWeight: '700', letterSpacing: 1, textTransform: 'uppercase' }}>
-          NOW
-        </Text>
-      </View>
-    </GlassCard>
-  );
-}
-
-const ROLE_OPTIONS: { key: ConvoyRole; label: string; emoji: string; desc: string }[] = [
-  { key: 'leader', label: 'Leader', emoji: '👑', desc: 'Sets the pace' },
-  { key: 'tail', label: 'Tail Gunner', emoji: '🔚', desc: 'Watches rear' },
-  { key: 'driver', label: 'Driver', emoji: '🚗', desc: 'Standard member' },
+const ROLE_OPTIONS: { key: ConvoyRole; label: string; emoji: string }[] = [
+  { key: 'leader', label: 'Leader', emoji: '👑' },
+  { key: 'tail', label: 'Tail', emoji: '🔚' },
+  { key: 'driver', label: 'Driver', emoji: '🚗' },
 ];
 
 export default function TripDashboardScreen() {
@@ -172,7 +49,7 @@ export default function TripDashboardScreen() {
   const currentSpeed = me?.speed ?? 0;
   const totalExpenses = ledger.reduce((s, i) => s + i.amount, 0);
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 4;
-
+  const speedPct = Math.min(currentSpeed / MAX_SPEED, 1);
   const sortedBySpeed = [...users].sort((a, b) => b.speed - a.speed);
 
   const handleEndConvoy = () => {
@@ -205,160 +82,229 @@ export default function TripDashboardScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: WF.bg }}>
-      {/* Subtle racing grid background */}
-      <View pointerEvents="none" style={{
-        position: 'absolute', inset: 0, top: 0, left: 0, right: 0, bottom: 0,
-        opacity: 0.6,
-      } as any}>
-        {Array.from({ length: 12 }, (_, i) => (
-          <View key={i} style={{ position: 'absolute', left: 0, right: 0, top: i * 80, height: 1, backgroundColor: 'rgba(255,255,255,0.018)' }} />
-        ))}
-        {Array.from({ length: 8 }, (_, i) => (
-          <View key={i} style={{ position: 'absolute', top: 0, bottom: 0, left: i * 60, width: 1, backgroundColor: 'rgba(255,255,255,0.018)' }} />
-        ))}
-      </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: topPad + 8, paddingHorizontal: 14, paddingBottom: 110 }}>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: topPad + 8, paddingHorizontal: 14, paddingBottom: 110 }}
-      >
         {/* ── Header ─────────────────────────────────────────────── */}
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 18 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
           <View>
-            <Text style={{ fontSize: 32, fontWeight: '800', color: WF.text, letterSpacing: -0.8, lineHeight: 36 }}>
-              Telemetry
+            <Text style={{ fontSize: 11, color: WF.textMut, letterSpacing: 3, textTransform: 'uppercase', fontWeight: '700' }}>
+              TRIP STATS
             </Text>
-            <Text style={{ fontSize: 10, color: WF.textMut, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 }}>
-              {convoyId ? convoyId.toUpperCase() : 'NO CONVOY'}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WF.green, shadowColor: WF.green, shadowOpacity: 0.8, shadowRadius: 4, elevation: 2 }} />
-            <Text style={{ fontSize: 10, color: WF.green, letterSpacing: 1.5, fontWeight: '700', textTransform: 'uppercase' }}>
-              LIVE
+            <Text style={{ fontSize: 28, fontWeight: '900', color: WF.text, letterSpacing: -0.5, marginTop: 2 }}>
+              {convoyId ?? 'No Convoy'}
             </Text>
           </View>
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,255,136,0.1)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0,255,136,0.25)' }}>
+              <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: WF.green }} />
+              <Text style={{ fontSize: 9, color: WF.green, fontWeight: '800', letterSpacing: 2 }}>LIVE</Text>
+            </View>
+            <Text style={{ fontSize: 9, color: WF.textDim, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+              {users.length} ONLINE
+            </Text>
+          </View>
         </View>
 
-        {/* ── Speedometer ────────────────────────────────────────── */}
-        <View style={{ alignItems: 'center', marginBottom: 16, position: 'relative' }}>
-          <View style={{
-            position: 'absolute', width: 200, height: 200,
-            borderRadius: 100,
-            backgroundColor: WF.amber + '18',
-            shadowColor: WF.amber, shadowOpacity: 0.3, shadowRadius: 40, elevation: 10,
-            top: 20,
-          }} />
-          <SpeedDial speed={currentSpeed} />
+        {/* ── Speed hero card ─────────────────────────────────────── */}
+        <View style={{
+          backgroundColor: 'rgba(20,20,24,0.95)',
+          borderWidth: 1,
+          borderColor: currentSpeed > 0 ? WF.amber + '50' : WF.line,
+          borderRadius: 24,
+          padding: 20,
+          marginBottom: 12,
+          overflow: 'hidden',
+        }}>
+          {currentSpeed > 0 && (
+            <View pointerEvents="none" style={{
+              position: 'absolute', right: -30, top: -30,
+              width: 150, height: 150, borderRadius: 75,
+              backgroundColor: WF.amber + '0D',
+            }} />
+          )}
+          <Text style={{ fontSize: 9, fontWeight: '800', color: WF.textMut, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 10 }}>
+            YOUR SPEED
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginBottom: 18 }}>
+            <Text style={{
+              fontSize: 88, fontWeight: '900', letterSpacing: -5, lineHeight: 84,
+              color: currentSpeed > 0 ? WF.text : WF.textDim,
+            }}>
+              {currentSpeed}
+            </Text>
+            <View style={{ paddingBottom: 10, gap: 6 }}>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: WF.amber, letterSpacing: 2 }}>KM/H</Text>
+              <View style={{
+                paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20,
+                backgroundColor: currentSpeed > 0 ? 'rgba(0,255,136,0.12)' : 'rgba(255,255,255,0.05)',
+                borderWidth: 1,
+                borderColor: currentSpeed > 0 ? 'rgba(0,255,136,0.3)' : 'rgba(255,255,255,0.07)',
+              }}>
+                <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1.5, color: currentSpeed > 0 ? WF.green : WF.textMut }}>
+                  {currentSpeed > 0 ? '▲ MOVING' : '■ STOPPED'}
+                </Text>
+              </View>
+            </View>
+          </View>
+          {/* Progress track */}
+          <View style={{ height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' }}>
+            <View style={{
+              width: `${speedPct * 100}%`,
+              height: '100%', borderRadius: 3,
+              backgroundColor: speedPct > 0.75 ? WF.red : speedPct > 0.4 ? WF.yellow : WF.amber,
+            }} />
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 }}>
+            <Text style={{ fontSize: 8, color: WF.textDim, letterSpacing: 1 }}>0</Text>
+            <Text style={{ fontSize: 8, color: WF.textDim, letterSpacing: 1 }}>{MAX_SPEED} KM/H MAX</Text>
+          </View>
         </View>
 
-        {/* ── Stat grid ──────────────────────────────────────────── */}
+        {/* ── Distance + Duration ─────────────────────────────────── */}
         <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-          <StatCard label="TOTAL DISTANCE" value={totalDistanceKm.toFixed(1)} unit="KM" />
-          <StatCard label="TRIP DURATION" value={formatDuration(tripStartTime)} unit="" />
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 10 }}>
-          <StatCard label="CARS LIVE" value={`${users.length}`} unit="" accent={WF.green} />
-          <StatCard label="EXPENSES" value={`${totalExpenses.toFixed(0)}`} unit="RM" accent={WF.amber} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
-          <StatCard label="MESSAGES" value={`${messages.length}`} unit="" accent={WF.cyan} />
-          <StatCard label="VOTES" value={`${votes.length}`} unit="" accent={WF.purple} />
-        </View>
-
-        {/* ── Route replay ───────────────────────────────────────── */}
-        <View style={{ marginBottom: 12 }}>
-          <ReplayMap />
-        </View>
-
-        {/* ── Convoy speed leaderboard ────────────────────────────── */}
-        {sortedBySpeed.length > 0 && (
-          <GlassCard style={{ padding: 14, marginBottom: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
-              <Text style={{ fontSize: 9, letterSpacing: 2, color: WF.textMut, fontWeight: '700', textTransform: 'uppercase' }}>
-                LIVE SPEED · CONVOY
+          <View style={{ flex: 1.3, backgroundColor: 'rgba(20,20,24,0.8)', borderWidth: 1, borderColor: WF.line, borderRadius: 18, padding: 16 }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: WF.textMut, letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8 }}>DISTANCE</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+              <Text style={{ fontSize: 36, fontWeight: '900', color: WF.text, letterSpacing: -2, lineHeight: 38 }}>
+                {totalDistanceKm.toFixed(1)}
               </Text>
-              <Text style={{ fontSize: 9, color: WF.textDim, letterSpacing: 1 }}>SESSION</Text>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: WF.textMut, letterSpacing: 1 }}>KM</Text>
+            </View>
+          </View>
+          <View style={{ flex: 1, backgroundColor: 'rgba(20,20,24,0.8)', borderWidth: 1, borderColor: WF.line, borderRadius: 18, padding: 16 }}>
+            <Text style={{ fontSize: 8, fontWeight: '800', color: WF.textMut, letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8 }}>DURATION</Text>
+            <Text style={{ fontSize: 36, fontWeight: '900', color: WF.text, letterSpacing: -2, lineHeight: 38 }}>
+              {formatDuration(tripStartTime)}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Convoy snapshot chips ───────────────────────────────── */}
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+          {[
+            { label: 'CARS', value: `${users.length}`, color: WF.green },
+            { label: 'MSGS', value: `${messages.length}`, color: WF.cyan },
+            { label: 'VOTES', value: `${votes.length}`, color: WF.purple },
+            { label: 'RM', value: totalExpenses.toFixed(0), color: WF.amber },
+          ].map(chip => (
+            <View key={chip.label} style={{
+              flex: 1, backgroundColor: 'rgba(20,20,24,0.8)', borderWidth: 1, borderColor: WF.line,
+              borderRadius: 14, paddingVertical: 12, alignItems: 'center', gap: 3,
+            }}>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: chip.color, letterSpacing: -0.5 }}>
+                {chip.value}
+              </Text>
+              <Text style={{ fontSize: 7, color: WF.textDim, letterSpacing: 2, fontWeight: '800', textTransform: 'uppercase' }}>
+                {chip.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {/* ── Live speed leaderboard ──────────────────────────────── */}
+        {sortedBySpeed.length > 0 && (
+          <View style={{ backgroundColor: 'rgba(20,20,24,0.8)', borderWidth: 1, borderColor: WF.line, borderRadius: 18, padding: 16, marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <Text style={{ fontSize: 9, letterSpacing: 2.5, color: WF.textMut, fontWeight: '800', textTransform: 'uppercase' }}>
+                LIVE SPEEDS
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: WF.green }} />
+                <Text style={{ fontSize: 8, color: WF.green, letterSpacing: 1.5, fontWeight: '700' }}>REAL TIME</Text>
+              </View>
             </View>
             {sortedBySpeed.slice(0, 5).map((u, i) => {
-              const maxSpeed = sortedBySpeed[0].speed || 1;
-              const pct = (u.speed / maxSpeed) * 100;
+              const maxSpd = Math.max(sortedBySpeed[0].speed, 1);
+              const pct = (u.speed / maxSpd) * 100;
+              const isMe = u.id === myId;
               return (
-                <View key={u.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 }}>
-                  <Text style={{ width: 16, fontSize: 11, color: i === 0 ? WF.amber : WF.textMut, fontWeight: '700', textAlign: 'center' }}>
+                <View key={u.id} style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 10,
+                  paddingVertical: 8,
+                  borderTopWidth: i === 0 ? 0 : 1,
+                  borderTopColor: 'rgba(255,255,255,0.04)',
+                }}>
+                  <Text style={{ width: 16, fontSize: 10, color: i === 0 ? WF.amber : WF.textDim, fontWeight: '900', textAlign: 'center' }}>
                     {i + 1}
                   </Text>
-                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: u.color }} />
-                  <Text style={{ flex: 1, fontSize: 12.5, color: WF.text, fontWeight: '600' }}>
-                    {u.id === myId ? 'You' : u.name}
-                  </Text>
-                  <View style={{ flex: 2, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
-                    <View style={{ width: `${pct}%`, height: '100%', backgroundColor: i === 0 ? WF.amber : 'rgba(255,255,255,0.3)' }} />
+                  <View style={{
+                    width: 28, height: 28, borderRadius: 9,
+                    backgroundColor: u.color + '22', borderWidth: 1.5, borderColor: u.color + '77',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: u.color }}>
+                      {u.name[0].toUpperCase()}
+                    </Text>
                   </View>
-                  <Text style={{ width: 60, textAlign: 'right', fontSize: 12, fontWeight: '700', color: i === 0 ? WF.amber : WF.text }}>
-                    {u.speed}<Text style={{ fontSize: 9, color: WF.textMut }}> KM</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 12, color: isMe ? WF.amber : WF.text, fontWeight: isMe ? '800' : '600', marginBottom: 4 }}>
+                      {isMe ? 'You' : u.name}
+                    </Text>
+                    <View style={{ height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                      <View style={{
+                        width: `${pct}%`, height: '100%', borderRadius: 2,
+                        backgroundColor: i === 0 ? WF.amber : u.color + 'bb',
+                      }} />
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: i === 0 ? WF.amber : WF.text, letterSpacing: -0.5 }}>
+                    {u.speed}<Text style={{ fontSize: 8, color: WF.textMut, fontWeight: '400' }}> km</Text>
                   </Text>
                 </View>
               );
             })}
-          </GlassCard>
+          </View>
         )}
 
-        {/* ── Convoy Roles ────────────────────────────────────────── */}
-        <Text style={{ fontSize: 10, fontWeight: '700', color: WF.textMut, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8, marginLeft: 2 }}>
-          CONVOY ROLES
+        {/* ── Convoy role picker ──────────────────────────────────── */}
+        <Text style={{ fontSize: 9, fontWeight: '800', color: WF.textMut, letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8, marginLeft: 2 }}>
+          YOUR ROLE
         </Text>
-        <GlassCard style={{ overflow: 'hidden', marginBottom: 14 }}>
-          {ROLE_OPTIONS.map((opt, idx) => {
-            const isMyRole = myRole === opt.key;
-            const holder = users.find(u => u.role === opt.key);
-            const holderName = holder ? (holder.id === myId ? 'You' : holder.name) : null;
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+          {ROLE_OPTIONS.map(opt => {
+            const isActive = myRole === opt.key;
+            const holder = users.find(u => u.role === opt.key && u.id !== myId);
             return (
               <TouchableOpacity
                 key={opt.key}
                 onPress={() => claimRole(opt.key)}
-                style={[{
-                  flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-                  paddingHorizontal: 16, paddingVertical: 14,
-                  backgroundColor: isMyRole ? 'rgba(255,106,0,0.06)' : 'transparent',
-                }, idx < ROLE_OPTIONS.length - 1 && { borderBottomWidth: 1, borderBottomColor: WF.line }]}
+                style={{
+                  flex: 1, paddingVertical: 14, borderRadius: 16, alignItems: 'center', gap: 5,
+                  backgroundColor: isActive ? 'rgba(255,106,0,0.12)' : 'rgba(20,20,24,0.8)',
+                  borderWidth: 1,
+                  borderColor: isActive ? WF.amber + '60' : WF.line,
+                }}
               >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <Text style={{ fontSize: 20 }}>{opt.emoji}</Text>
-                  <View>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: isMyRole ? WF.amber : WF.text }}>
-                      {opt.label}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: WF.textDim, marginTop: 1 }}>{opt.desc}</Text>
-                  </View>
-                </View>
-                {holderName ? (
-                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: isMyRole ? 'rgba(255,106,0,0.15)' : 'rgba(255,255,255,0.06)' }}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: isMyRole ? WF.amber : WF.textMut }}>
-                      {holderName}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={{ fontSize: 10, color: WF.textDim }}>Claim</Text>
+                <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
+                <Text style={{ fontSize: 9, fontWeight: '900', color: isActive ? WF.amber : WF.textMut, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+                  {opt.label}
+                </Text>
+                {holder && (
+                  <Text style={{ fontSize: 8, color: WF.textDim, letterSpacing: 0.5 }}>{holder.name}</Text>
                 )}
               </TouchableOpacity>
             );
           })}
-        </GlassCard>
+        </View>
 
         {/* ── End Convoy ──────────────────────────────────────────── */}
         <TouchableOpacity
           onPress={handleEndConvoy}
-          style={{ backgroundColor: 'rgba(255,45,85,0.08)', borderWidth: 1, borderColor: 'rgba(255,45,85,0.3)', borderRadius: 16, paddingVertical: 18, alignItems: 'center', marginBottom: 8 }}
+          style={{
+            backgroundColor: 'rgba(255,45,85,0.07)',
+            borderWidth: 1, borderColor: 'rgba(255,45,85,0.28)',
+            borderRadius: 16, paddingVertical: 18, alignItems: 'center',
+          }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <MaterialIcons name="flag" size={20} color={WF.red} />
-            <Text style={{ color: WF.red, fontWeight: '900', fontSize: 15, textTransform: 'uppercase', letterSpacing: 2 }}>
+            <MaterialIcons name="flag" size={18} color={WF.red} />
+            <Text style={{ color: WF.red, fontWeight: '900', fontSize: 14, textTransform: 'uppercase', letterSpacing: 2 }}>
               End Convoy
             </Text>
           </View>
           <Text style={{ color: WF.textDim, fontSize: 11, marginTop: 4 }}>Saves trip summary to history</Text>
         </TouchableOpacity>
+
       </ScrollView>
     </View>
   );
