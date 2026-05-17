@@ -1,428 +1,488 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import BottomSheet, { BottomSheetScrollView, BottomSheetView } from '@gorhom/bottom-sheet';
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { Alert, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View, useColorScheme } from 'react-native';
-import TopAppBar from '../../components/TopAppBar';
+import { Alert, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, Marker, RoutePolyline, RouteMarker, PROVIDER_DEFAULT } from '../../components/NativeMap';
 import { DRIVER_STATUS_LABELS, DriverStatus, HAZARD_LABELS, HazardType, useConvoy } from '../../contexts/ConvoyContext';
 import { useNavigation } from '../../contexts/NavigationContext';
 import SearchPanel from '../../components/SearchPanel';
 import NavigationPanel from '../../components/NavigationPanel';
-import tw from '../../lib/tailwind';
+
+const WF = {
+  bg: '#0A0A0F',
+  panel: '#141418',
+  line: 'rgba(255,255,255,0.09)',
+  amber: '#FF6A00',
+  amberHi: '#FF8A2A',
+  cyan: '#00D4FF',
+  green: '#00FF88',
+  red: '#FF2D55',
+  yellow: '#FFC400',
+  text: '#F4F4F6',
+  textMut: 'rgba(244,244,246,0.62)',
+  textDim: 'rgba(244,244,246,0.38)',
+};
 
 const darkMapStyle = [
-    { elementType: 'geometry', stylers: [{ color: '#212121' }] },
-    { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#757575' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#212121' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#303030' }] },
-    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1a1a1a' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#000000' }] },
+  { elementType: 'geometry', stylers: [{ color: '#0A0B10' }] },
+  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#52525B' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0A0B10' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1A1A24' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#0D0D14' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#232330' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#06101C' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#0E0E18' }] },
 ];
-const lightMapStyle = [{ elementType: 'labels.icon', stylers: [{ visibility: 'off' }] }];
 
 const HAZARD_EMOJI: Record<HazardType, string> = {
-    speed_trap: '🚔', pothole: '🕳️', accident: '💥', road_closed: '🚧', construction: '🏗️',
+  speed_trap: '🚔', pothole: '🕳️', accident: '💥', road_closed: '🚧', construction: '🏗️',
 };
 
 const STATUS_OPTIONS: { key: DriverStatus; label: string; icon: string; color: string }[] = [
-    { key: 'moving', label: 'Moving', icon: 'navigation', color: '#00FF66' },
-    { key: 'gas', label: 'Gas Stop', icon: 'local-gas-station', color: '#FFD600' },
-    { key: 'bathroom', label: 'Bathroom', icon: 'wc', color: '#00D1FF' },
-    { key: 'food', label: 'Food Stop', icon: 'restaurant', color: '#FF6A00' },
-    { key: 'car_trouble', label: 'Car Trouble', icon: 'car-repair', color: '#FF3366' },
-    { key: 'pulling_over', label: 'Pulling Over', icon: 'pull-off', color: '#B44FFF' },
+  { key: 'moving', label: 'Moving', icon: 'navigation', color: WF.green },
+  { key: 'gas', label: 'Gas Stop', icon: 'local-gas-station', color: WF.yellow },
+  { key: 'bathroom', label: 'Restroom', icon: 'wc', color: WF.cyan },
+  { key: 'food', label: 'Food Stop', icon: 'restaurant', color: WF.amberHi },
+  { key: 'car_trouble', label: 'Car Trouble', icon: 'car-repair', color: WF.red },
+  { key: 'pulling_over', label: 'Pulling Over', icon: 'pull-off', color: '#B44FFF' },
 ];
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
-    const R = 6371;
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Glassmorphism-style panel
+function GlassPanel({ children, style }: { children: React.ReactNode; style?: any }) {
+  return (
+    <View style={[{
+      backgroundColor: 'rgba(14,14,20,0.88)',
+      borderWidth: 1,
+      borderColor: WF.line,
+      borderRadius: 16,
+      ...(Platform.OS === 'web' ? { backdropFilter: 'blur(14px)' } as any : {}),
+    }, style]}>
+      {children}
+    </View>
+  );
+}
+
+// Expandable FAB
+function MapFAB({ onSOS, onHazard }: { onSOS: () => void; onHazard: () => void }) {
+  const [open, setOpen] = useState(false);
+  const items = [
+    { id: 'sos', label: 'SOS', color: WF.red, onPress: () => { onSOS(); setOpen(false); } },
+    { id: 'hazard', label: 'Hazard', color: WF.yellow, onPress: () => { onHazard(); setOpen(false); } },
+    { id: 'share', label: 'Share', color: WF.amber, onPress: () => setOpen(false) },
+  ];
+
+  return (
+    <View style={{ position: 'absolute', right: 14, bottom: Platform.OS === 'web' ? 230 : 240, zIndex: 40, alignItems: 'flex-end', gap: 10 }}>
+      {open && items.map(it => (
+        <View key={it.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <GlassPanel style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
+            <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 1.5, color: WF.text, textTransform: 'uppercase' }}>{it.label}</Text>
+          </GlassPanel>
+          <TouchableOpacity
+            onPress={it.onPress}
+            style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: it.color, alignItems: 'center', justifyContent: 'center', shadowColor: it.color, shadowOpacity: 0.6, shadowRadius: 16, elevation: 8 }}
+          >
+            {it.id === 'sos' && <Text style={{ fontSize: 11, fontWeight: '900', color: '#fff' }}>SOS</Text>}
+            {it.id === 'hazard' && <Text style={{ fontSize: 20 }}>⚠️</Text>}
+            {it.id === 'share' && <MaterialIcons name="share" size={20} color="#0A0A0F" />}
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      <TouchableOpacity
+        onPress={() => setOpen(!open)}
+        style={{
+          width: 56, height: 56, borderRadius: 28,
+          backgroundColor: open ? 'rgba(20,20,24,0.95)' : WF.amber,
+          borderWidth: open ? 1 : 0, borderColor: WF.line,
+          alignItems: 'center', justifyContent: 'center',
+          shadowColor: open ? '#000' : WF.amber, shadowOpacity: open ? 0.3 : 0.5, shadowRadius: 20, elevation: 8,
+          transform: [{ rotate: open ? '45deg' : '0deg' }],
+        }}
+      >
+        <MaterialIcons name="add" size={28} color={open ? WF.text : '#0A0A0F'} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// Member row in convoy drawer
+function DrawerRow({ user, isMe, myId }: { user: any; isMe: boolean; myId: string }) {
+  const initials = user.name.split(/\s+/).map((p: string) => p[0]).slice(0, 2).join('').toUpperCase();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 7, paddingHorizontal: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color }}>
+      <View style={{ width: 30, height: 30, borderRadius: 9, backgroundColor: user.color + '20', borderWidth: 1, borderColor: user.color + '55', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontSize: 10, fontWeight: '700', color: user.color, letterSpacing: 0.5 }}>{initials}</Text>
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontSize: 13.5, fontWeight: '600', color: WF.text }}>
+            {isMe ? 'You' : user.name}
+          </Text>
+          {user.role === 'leader' && (
+            <View style={{ paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, backgroundColor: 'rgba(255,106,0,0.18)' }}>
+              <Text style={{ fontSize: 8, fontWeight: '800', color: WF.amber, letterSpacing: 1 }}>LEAD</Text>
+            </View>
+          )}
+        </View>
+        <Text style={{ fontSize: 10, color: WF.textMut, letterSpacing: 0.2 }}>{user.status}</Text>
+      </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 17, fontWeight: '700', color: user.speed > 0 ? WF.text : WF.textDim, lineHeight: 20 }}>
+          {user.speed}<Text style={{ fontSize: 9, color: WF.textMut }}> KM/H</Text>
+        </Text>
+        <Text style={{ fontSize: 9, color: user.speed > 0 ? WF.green : WF.textDim, letterSpacing: 1, textTransform: 'uppercase' }}>
+          {user.speed > 0 ? '▲ MOVING' : '■ STOPPED'}
+        </Text>
+      </View>
+    </View>
+  );
 }
 
 export default function ConvoyRadarScreen() {
-    const bottomSheetRef = useRef<BottomSheet>(null);
-    const mapRef = useRef<any>(null);
-    const snapPoints = useMemo(() => ['18%', '50%'], []);
-    const hasCenteredRef = useRef(false);
+  const bottomSheetRef = useRef<BottomSheet>(null);
+  const mapRef = useRef<any>(null);
+  const snapPoints = useMemo(() => ['18%', '50%'], []);
+  const hasCenteredRef = useRef(false);
+  const insets = useSafeAreaInsets();
 
-    const { users, myId, convoyId, hazardPins, sosAlerts, myStatus, addHazardPin, sendSOS, dismissSOS, setMyStatus } = useConvoy();
-    const nav = useNavigation();
+  const { users, myId, convoyId, hazardPins, sosAlerts, myStatus, addHazardPin, sendSOS, dismissSOS, setMyStatus } = useConvoy();
+  const nav = useNavigation();
 
-    const me = users.find(u => u.id === myId);
-    const centerLat = me?.lat ?? 3.139;
-    const centerLng = me?.lng ?? 101.6869;
-    const currentSpeed = me?.speed ?? 0;
+  const me = users.find(u => u.id === myId);
+  const centerLat = me?.lat ?? 3.139;
+  const centerLng = me?.lng ?? 101.6869;
 
-    const [showStatusPicker, setShowStatusPicker] = useState(false);
-    const [showHazardPicker, setShowHazardPicker] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [showHazardPicker, setShowHazardPicker] = useState(false);
 
-    // Auto-center on first GPS fix
-    React.useEffect(() => {
-        if (me && !hasCenteredRef.current && mapRef.current) {
-            hasCenteredRef.current = true;
-            mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
-        }
-    }, [me?.lat, me?.lng]);
+  useEffect(() => {
+    if (me && !hasCenteredRef.current && mapRef.current) {
+      hasCenteredRef.current = true;
+      mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
+    }
+  }, [me?.lat, me?.lng]);
 
-    // Auto-set origin to user's location when planning
-    useEffect(() => {
-        if (me && !nav.origin && nav.mode === 'planning') {
-            nav.setOrigin({ lat: me.lat, lng: me.lng }, 'My Location');
-        }
-    }, [me?.lat, me?.lng, nav.mode]);
+  useEffect(() => {
+    if (me && !nav.origin && nav.mode === 'planning') {
+      nav.setOrigin({ lat: me.lat, lng: me.lng }, 'My Location');
+    }
+  }, [me?.lat, me?.lng, nav.mode]);
 
-    // Feed GPS position to navigation context during active navigation
-    useEffect(() => {
-        if (me && nav.mode === 'navigating') {
-            nav.updatePosition({ lat: me.lat, lng: me.lng });
-        }
-    }, [me?.lat, me?.lng, nav.mode]);
+  useEffect(() => {
+    if (me && nav.mode === 'navigating') {
+      nav.updatePosition({ lat: me.lat, lng: me.lng });
+    }
+  }, [me?.lat, me?.lng, nav.mode]);
 
-    // Fit map to route bounds when route is calculated
-    useEffect(() => {
-        if (nav.route && mapRef.current?.fitBounds) {
-            const bbox = nav.route.bbox;
-            if (bbox && bbox[0] !== 0) {
-                mapRef.current.fitBounds([
-                    [bbox[1], bbox[0]], // SW corner [lat, lng]
-                    [bbox[3], bbox[2]], // NE corner [lat, lng]
-                ]);
-            }
-        }
-    }, [nav.route]);
+  useEffect(() => {
+    if (nav.route && mapRef.current?.fitBounds) {
+      const bbox = nav.route.bbox;
+      if (bbox && bbox[0] !== 0) {
+        mapRef.current.fitBounds([[bbox[1], bbox[0]], [bbox[3], bbox[2]]]);
+      }
+    }
+  }, [nav.route]);
 
-    const centerOnUser = () => {
-        if (me && mapRef.current) {
-            mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
-        }
-    };
+  const centerOnUser = () => {
+    if (me && mapRef.current) {
+      mapRef.current.animateToRegion({ latitude: me.lat, longitude: me.lng, latitudeDelta: 0.05, longitudeDelta: 0.05 });
+    }
+  };
 
-    const handleSOS = () => {
-        Alert.alert('🚨 Send SOS?', 'This will alert your entire convoy and send push notifications to everyone.', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Send SOS', style: 'destructive', onPress: sendSOS },
-        ]);
-    };
+  const handleSOS = () => {
+    Alert.alert('🚨 Send SOS?', 'This will alert your entire convoy.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Send SOS', style: 'destructive', onPress: sendSOS },
+    ]);
+  };
 
-    const handleAddHazard = (type: HazardType) => {
-        const pos = me ?? { lat: centerLat, lng: centerLng };
-        addHazardPin(type, pos.lat, pos.lng);
-        setShowHazardPicker(false);
-    };
+  const handleAddHazard = (type: HazardType) => {
+    const pos = me ?? { lat: centerLat, lng: centerLng };
+    addHazardPin(type, pos.lat, pos.lng);
+    setShowHazardPicker(false);
+  };
 
-    // Handle map clicks for setting origin/destination
-    const handleMapClick = (latlng: { lat: number; lng: number }) => {
-        if (nav.mode === 'idle') return;
+  const handleMapClick = (latlng: { lat: number; lng: number }) => {
+    if (nav.mode === 'idle') return;
+    if (!nav.destination) nav.setDestination(latlng);
+    else if (!nav.origin) nav.setOrigin(latlng);
+    else nav.setDestination(latlng);
+  };
 
-        // If no destination is set, set destination
-        if (!nav.destination) {
-            nav.setDestination(latlng);
-        } else if (!nav.origin) {
-            nav.setOrigin(latlng);
-        } else {
-            // Both set — update destination
-            nav.setDestination(latlng);
-        }
-    };
+  const isNavigating = nav.mode === 'navigating';
+  const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
 
-    const isNavigating = nav.mode === 'navigating';
+  return (
+    <View style={{ flex: 1, backgroundColor: WF.bg }}>
+      {/* Map */}
+      <View style={StyleSheet.absoluteFill}>
+        <MapView
+          ref={mapRef}
+          style={StyleSheet.absoluteFill}
+          customMapStyle={darkMapStyle}
+          provider={PROVIDER_DEFAULT}
+          initialRegion={{ latitude: centerLat, longitude: centerLng, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+          showsUserLocation={false}
+          onMapClick={nav.mode !== 'idle' ? handleMapClick : undefined}
+        >
+          {nav.route && <RoutePolyline positions={nav.route.polyline} color={WF.amber} weight={5} opacity={0.9} />}
+          {nav.origin && <RouteMarker coordinate={{ latitude: nav.origin.lat, longitude: nav.origin.lng }} type="origin" label={nav.originLabel} />}
+          {nav.destination && <RouteMarker coordinate={{ latitude: nav.destination.lat, longitude: nav.destination.lng }} type="destination" label={nav.destinationLabel} />}
 
-    return (
-        <View style={tw`flex-1 bg-[#121212]`}>
-            {/* Map */}
-            <View style={StyleSheet.absoluteFill}>
-                <MapView
-                    ref={mapRef}
-                    style={StyleSheet.absoluteFill}
-                    customMapStyle={darkMapStyle}
-                    provider={PROVIDER_DEFAULT}
-                    initialRegion={{ latitude: centerLat, longitude: centerLng, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
-                    showsUserLocation={false}
-                    onMapClick={nav.mode !== 'idle' ? handleMapClick : undefined}
-                >
-                    {/* Route Polyline */}
-                    {nav.route && (
-                        <RoutePolyline
-                            positions={nav.route.polyline}
-                            color="#FF6A00"
-                            weight={5}
-                            opacity={0.9}
-                        />
-                    )}
+          {users.map(user => (
+            <Marker
+              key={user.id}
+              coordinate={{ latitude: user.lat, longitude: user.lng }}
+              markerColor={user.color}
+              markerLabel={user.name}
+            >
+              <View style={{ alignItems: 'center' }}>
+                {/* Name pill */}
+                <View style={{ backgroundColor: 'rgba(10,10,15,0.82)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: user.color }} />
+                  <Text style={{ color: WF.text, fontSize: 10, fontWeight: '700', letterSpacing: 0.3 }}>
+                    {user.id === myId ? 'YOU' : user.name.toUpperCase()}
+                  </Text>
+                  {user.speed > 0 && (
+                    <Text style={{ color: WF.textDim, fontSize: 9 }}>· {user.speed}</Text>
+                  )}
+                </View>
+                {/* Glowing orb */}
+                <View style={{
+                  width: user.id === myId ? 22 : 16,
+                  height: user.id === myId ? 22 : 16,
+                  borderRadius: user.id === myId ? 11 : 8,
+                  backgroundColor: user.color,
+                  borderWidth: 2, borderColor: 'rgba(255,255,255,0.9)',
+                  shadowColor: user.color, shadowOpacity: 0.9, shadowRadius: 10, elevation: 6,
+                  ...(user.isTalking ? { borderColor: WF.yellow, borderWidth: 3 } : {}),
+                }} />
+              </View>
+            </Marker>
+          ))}
 
-                    {/* Route Markers */}
-                    {nav.origin && (
-                        <RouteMarker
-                            coordinate={{ latitude: nav.origin.lat, longitude: nav.origin.lng }}
-                            type="origin"
-                            label={nav.originLabel}
-                        />
-                    )}
-                    {nav.destination && (
-                        <RouteMarker
-                            coordinate={{ latitude: nav.destination.lat, longitude: nav.destination.lng }}
-                            type="destination"
-                            label={nav.destinationLabel}
-                        />
-                    )}
+          {hazardPins.map(pin => (
+            <Marker key={pin.id} coordinate={{ latitude: pin.lat, longitude: pin.lng }} markerColor={WF.yellow} markerLabel={HAZARD_EMOJI[pin.type]}>
+              <View style={{ backgroundColor: 'rgba(255,196,0,0.9)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 }}>
+                <Text style={{ fontSize: 14 }}>{HAZARD_EMOJI[pin.type]}</Text>
+              </View>
+            </Marker>
+          ))}
 
-                    {/* Convoy members */}
-                    {users.map(user => (
-                        <Marker
-                            key={user.id}
-                            coordinate={{ latitude: user.lat, longitude: user.lng }}
-                            markerColor={user.color}
-                            markerLabel={user.name + (user.id === myId ? ' (You)' : '')}
-                        >
-                            <View style={tw`items-center`}>
-                                <View style={[tw`px-2 py-1 rounded-full mb-1 shadow-sm`, { backgroundColor: user.color }]}>
-                                    <Text style={tw`text-black text-[10px] font-bold`}>
-                                        {user.name}{user.id === myId ? ' (You)' : ''}
-                                    </Text>
-                                </View>
-                                <View style={[
-                                    tw`w-7 h-7 rounded-full border-2 border-white items-center justify-center shadow-lg`,
-                                    { backgroundColor: user.color },
-                                    user.isTalking ? { borderColor: '#FFD600', borderWidth: 3 } : {},
-                                ]}>
-                                    <MaterialCommunityIcons name="car-side" size={16} color="black" />
-                                </View>
-                            </View>
-                        </Marker>
-                    ))}
-                    {/* Hazard pins */}
-                    {hazardPins.map(pin => (
-                        <Marker
-                            key={pin.id}
-                            coordinate={{ latitude: pin.lat, longitude: pin.lng }}
-                            markerColor="#FFD600"
-                            markerLabel={HAZARD_EMOJI[pin.type]}
-                        >
-                            <View style={tw`items-center`}>
-                                <View style={tw`bg-yellow-400 px-2 py-1 rounded-full shadow-md`}>
-                                    <Text style={tw`text-[16px]`}>{HAZARD_EMOJI[pin.type]}</Text>
-                                </View>
-                            </View>
-                        </Marker>
-                    ))}
-                    {/* SOS pins */}
-                    {sosAlerts.map(sos => (
-                        <Marker
-                            key={sos.id}
-                            coordinate={{ latitude: sos.lat, longitude: sos.lng }}
-                            markerColor="#FF3366"
-                            markerLabel={`🚨 ${sos.userName}`}
-                        >
-                            <View style={tw`items-center`}>
-                                <View style={tw`bg-red-500 px-2 py-1 rounded-full shadow-md`}>
-                                    <Text style={tw`text-white text-[10px] font-black`}>🚨 {sos.userName}</Text>
-                                </View>
-                            </View>
-                        </Marker>
-                    ))}
-                </MapView>
+          {sosAlerts.map(sos => (
+            <Marker key={sos.id} coordinate={{ latitude: sos.lat, longitude: sos.lng }} markerColor={WF.red} markerLabel={`🚨 ${sos.userName}`}>
+              <View style={{ backgroundColor: WF.red, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 }}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>🚨 {sos.userName}</Text>
+              </View>
+            </Marker>
+          ))}
+        </MapView>
+      </View>
+
+      {/* ── Glassmorphism top bar ─────────────────────────────────── */}
+      <View style={{ position: 'absolute', top: topPad, left: 12, right: 12, zIndex: 30, flexDirection: 'row', gap: 8 }}>
+        <GlassPanel style={{ flex: 1, paddingHorizontal: 14, paddingVertical: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={{ fontSize: 17, fontWeight: '800', letterSpacing: -0.4, color: WF.amber }}>
+                WAYFINDER
+              </Text>
+              <Text style={{ fontSize: 9, color: WF.textMut, letterSpacing: 1.5, marginTop: -1, textTransform: 'uppercase' }}>
+                {convoyId ? `CONVOY · ${users.length} CARS` : 'NO CONVOY'}
+              </Text>
             </View>
-
-            <TopAppBar customStyle={`bg-transparent absolute top-0 left-0 right-0 z-50 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
-
-            {/* Search Panel (hides during navigation) */}
-            <SearchPanel />
-
-            {/* Navigation Panel (shows during navigation) */}
-            <NavigationPanel currentSpeed={currentSpeed} />
-
-            {/* SOS Alerts Banner */}
-            {sosAlerts.length > 0 && (
-                <View style={tw`absolute top-32 left-4 right-4 z-30`}>
-                    {sosAlerts.map(sos => (
-                        <View key={sos.id} style={tw`bg-red-500 rounded-2xl px-4 py-3 mb-2 flex-row items-center justify-between shadow-xl`}>
-                            <View style={tw`flex-row items-center gap-2`}>
-                                <Text style={tw`text-lg`}>🚨</Text>
-                                <View>
-                                    <Text style={tw`text-white font-black text-sm`}>{sos.userName} needs help!</Text>
-                                    <Text style={tw`text-white/80 text-[10px]`}>Tap map pin to navigate</Text>
-                                </View>
-                            </View>
-                            <TouchableOpacity onPress={() => dismissSOS(sos.id)} style={tw`bg-white/20 p-2 rounded-full`}>
-                                <MaterialIcons name="close" size={14} color="white" />
-                            </TouchableOpacity>
-                        </View>
-                    ))}
-                </View>
+            {convoyId && (
+              <View style={{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: 'rgba(255,106,0,0.14)', borderWidth: 1, borderColor: 'rgba(255,106,0,0.4)' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: WF.amber, letterSpacing: 1.4, textTransform: 'uppercase' }}>{convoyId}</Text>
+              </View>
             )}
+          </View>
+        </GlassPanel>
+        {/* Map layers button */}
+        <GlassPanel style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+          <MaterialIcons name="layers" size={18} color={WF.text} />
+        </GlassPanel>
+      </View>
 
-            {/* HUD row - only show when NOT navigating */}
-            {!isNavigating && (
-                <View style={[tw`absolute left-0 right-0 px-4`, { top: sosAlerts.length > 0 ? 200 : (Platform.OS === 'web' ? 100 : 128) }]}>
-                    <View style={tw`flex-row justify-between items-center`}>
-                        <View style={tw`bg-black/80 px-3 py-1.5 rounded-full border border-zinc-800 flex-row items-center gap-2 shadow-sm`}>
-                            <View style={tw`w-2 h-2 rounded-full bg-green-500`} />
-                            <Text style={tw`text-white text-[10px] font-bold uppercase tracking-widest`}>
-                                {users.length} {users.length === 1 ? 'Car' : 'Cars'} Live
-                            </Text>
-                        </View>
-                        <TouchableOpacity onPress={centerOnUser} style={tw`bg-black/80 w-10 h-10 rounded-full border border-zinc-800 items-center justify-center shadow-sm`}>
-                            <MaterialIcons name="my-location" size={20} style={tw`text-white`} />
-                        </TouchableOpacity>
-                    </View>
+      {/* Search + Navigation panels */}
+      <SearchPanel />
+      <NavigationPanel currentSpeed={me?.speed ?? 0} />
+
+      {/* SOS alerts */}
+      {sosAlerts.length > 0 && (
+        <View style={{ position: 'absolute', top: topPad + 70, left: 12, right: 12, zIndex: 30 }}>
+          {sosAlerts.map(sos => (
+            <View key={sos.id} style={{ backgroundColor: WF.red, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 16 }}>🚨</Text>
+                <View>
+                  <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>{sos.userName} needs help!</Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10 }}>Tap map pin to navigate</Text>
                 </View>
-            )}
-
-            {/* Floating Action Buttons (right side) */}
-            <View style={{ position: 'absolute', right: 16, bottom: isNavigating ? 160 : 220, zIndex: 40 }}>
-                {/* Recenter (during navigation) */}
-                {isNavigating && (
-                    <TouchableOpacity onPress={centerOnUser} style={tw`w-14 h-14 bg-[#1C1C1E] border-2 border-zinc-700 rounded-full items-center justify-center shadow-xl mb-3`}>
-                        <MaterialIcons name="my-location" size={24} style={tw`text-white`} />
-                    </TouchableOpacity>
-                )}
-                {/* SOS */}
-                <TouchableOpacity onPress={handleSOS} style={tw`w-14 h-14 bg-red-500 rounded-full items-center justify-center shadow-2xl mb-3`}>
-                    <Text style={tw`text-white font-black text-[11px] tracking-widest`}>SOS</Text>
-                </TouchableOpacity>
-                {/* Hazard */}
-                <TouchableOpacity onPress={() => setShowHazardPicker(true)} style={tw`w-14 h-14 bg-yellow-400 rounded-full items-center justify-center shadow-xl mb-3`}>
-                    <Text style={tw`text-[22px]`}>⚠️</Text>
-                </TouchableOpacity>
-                {/* Status */}
-                <TouchableOpacity onPress={() => setShowStatusPicker(true)} style={tw`w-14 h-14 bg-[#1C1C1E] border-2 border-zinc-700 rounded-full items-center justify-center shadow-xl`}>
-                    <MaterialIcons name="person-pin" size={26} style={tw`text-white`} />
-                </TouchableOpacity>
+              </View>
+              <TouchableOpacity onPress={() => dismissSOS(sos.id)} style={{ backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 20 }}>
+                <MaterialIcons name="close" size={14} color="white" />
+              </TouchableOpacity>
             </View>
- 
-            {/* Bottom Sheet / Status Panel — hide during navigation */}
-            {!isNavigating && (
-                Platform.OS === 'web' ? (
-                    <View style={[tw`bg-[#1C1C1E]/95 border-t border-zinc-800 p-5 rounded-t-3xl shadow-2xl`, { height: 200, position: 'absolute', bottom: 0, left: 0, right: 0 }]}>
-                        <View style={tw`flex-row justify-between items-center mb-4`}>
-                            <Text style={tw`text-[10px] font-black uppercase tracking-widest text-[#FF6A00]`}>
-                                Live Convoy Dashboard
-                            </Text>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-3 flex-row pb-2`}>
-                            {users.map(user => (
-                                <View key={user.id} style={tw`bg-[#121212] border border-zinc-800 rounded-2xl p-4 w-44 relative overflow-hidden shadow-sm`}>
-                                    <View style={[tw`absolute left-0 top-0 bottom-0 w-1`, { backgroundColor: user.color }]} />
-                                    <View style={tw`flex-row items-center gap-1 mb-1 ml-1`}>
-                                        <Text style={tw`text-white font-bold text-sm`} numberOfLines={1}>
-                                            {user.name}{user.id === myId ? ' (You)' : ''}
-                                        </Text>
-                                    </View>
-                                    <Text style={tw`text-zinc-400 text-[10px] mb-2 ml-1 uppercase font-bold tracking-tighter`}>
-                                        {user.status}
-                                    </Text>
-                                    <View style={tw`flex-row items-end justify-between ml-1`}>
-                                        <Text style={tw`text-white font-black text-xl`}>
-                                            {user.speed}<Text style={tw`text-zinc-500 text-[10px] font-normal`}> KM/H</Text>
-                                        </Text>
-                                        {user.id !== myId && (
-                                            <TouchableOpacity 
-                                                onPress={() => Linking.openURL(`https://www.waze.com/ul?ll=${user.lat},${user.lng}&navigate=yes`)}
-                                                style={tw`bg-[#33CCFF] w-8 h-8 rounded-lg items-center justify-center shadow-sm`}
-                                            >
-                                                <MaterialCommunityIcons name="navigation" size={16} color="white" />
-                                            </TouchableOpacity>
-                                        )}
-                                    </View>
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
-                ) : (
-                    <BottomSheet
-                        ref={bottomSheetRef}
-                        index={1}
-                        snapPoints={snapPoints}
-                        enablePanDownToClose={false}
-                        handleIndicatorStyle={{ backgroundColor: '#52525B', width: 40 }}
-                        backgroundStyle={tw`bg-[#1C1C1E] border border-zinc-800`}
-                    >
-                        <BottomSheetView style={tw`flex-1 px-5 pt-1 pb-6`}>
-                            <View style={tw`flex-row justify-between items-center mb-4`}>
-                                <Text style={tw`text-[10px] font-bold uppercase tracking-widest text-[#0099D1] dark:text-[#00D1FF]`}>
-                                    Convoy Status • Live
-                                </Text>
-                            </View>
-                            <BottomSheetScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-3 flex-row`}>
-                                {users.map(user => (
-                                    <View key={user.id} style={tw`bg-[#FAFAFA] dark:bg-[#121212] border border-zinc-200 dark:border-zinc-800 rounded-2xl p-4 w-44 relative overflow-hidden shadow-sm`}>
-                                        <View style={[tw`absolute left-0 top-0 bottom-0 w-1`, { backgroundColor: user.color }]} />
-                                        <View style={tw`flex-row items-center gap-1 mb-1 ml-1`}>
-                                            <Text style={tw`text-black dark:text-white font-bold text-sm`} numberOfLines={1}>
-                                                {user.name}{user.id === myId ? ' (You)' : ''}
-                                            </Text>
-                                        </View>
-                                        <Text style={tw`text-zinc-500 dark:text-zinc-400 text-[10px] mb-2 ml-1`}>
-                                            {user.status}
-                                        </Text>
-                                        <View style={tw`flex-row items-end justify-between ml-1`}>
-                                            <Text style={tw`text-black dark:text-white font-black text-lg`}>
-                                                {user.speed}<Text style={tw`text-zinc-500 text-[10px] font-normal`}> km/h</Text>
-                                            </Text>
-                                            {user.id !== myId && (
-                                                <TouchableOpacity 
-                                                    onPress={() => Linking.openURL(`https://www.waze.com/ul?ll=${user.lat},${user.lng}&navigate=yes`)}
-                                                    style={tw`bg-[#33CCFF] w-8 h-8 rounded-lg items-center justify-center shadow-sm`}
-                                                >
-                                                    <MaterialCommunityIcons name="navigation" size={16} color="white" />
-                                                </TouchableOpacity>
-                                            )}
-                                        </View>
-                                    </View>
-                                ))}
-                            </BottomSheetScrollView>
-                        </BottomSheetView>
-                    </BottomSheet>
-                )
-            )}
-
-            {/* Status Picker Modal */}
-            <Modal visible={showStatusPicker} transparent animationType="slide" onRequestClose={() => setShowStatusPicker(false)}>
-                <TouchableOpacity style={tw`flex-1 bg-black/50`} activeOpacity={1} onPress={() => setShowStatusPicker(false)} />
-                <View style={tw`bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
-                    <Text style={tw`text-white font-black text-lg uppercase tracking-widest mb-5 text-center`}>My Status</Text>
-                    {STATUS_OPTIONS.map(opt => (
-                        <TouchableOpacity
-                            key={opt.key}
-                            onPress={() => { setMyStatus(opt.key); setShowStatusPicker(false); }}
-                            style={[
-                                tw`flex-row items-center gap-4 p-4 rounded-2xl mb-2 border`,
-                                myStatus === opt.key
-                                    ? { backgroundColor: opt.color + '20', borderColor: opt.color }
-                                    : tw`border-zinc-800`,
-                            ]}
-                        >
-                            <MaterialIcons name={opt.icon as any} size={24} color={myStatus === opt.key ? opt.color : '#52525B'} />
-                            <Text style={[tw`font-bold text-base`, myStatus === opt.key ? { color: opt.color } : tw`text-white`]}>
-                                {opt.label}
-                            </Text>
-                            {myStatus === opt.key && <MaterialIcons name="check" size={20} color={opt.color} style={tw`ml-auto`} />}
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </Modal>
-
-            {/* Hazard Picker Modal */}
-            <Modal visible={showHazardPicker} transparent animationType="slide" onRequestClose={() => setShowHazardPicker(false)}>
-                <TouchableOpacity style={tw`flex-1 bg-black/50`} activeOpacity={1} onPress={() => setShowHazardPicker(false)} />
-                <View style={tw`bg-[#1C1C1E] rounded-t-3xl px-6 pt-4 pb-10`}>
-                    <Text style={tw`text-white font-black text-lg uppercase tracking-widest mb-2 text-center`}>Report Hazard</Text>
-                    <Text style={tw`text-zinc-500 text-xs text-center mb-5`}>Pins at your current location, visible to all convoy members</Text>
-                    {(Object.keys(HAZARD_LABELS) as HazardType[]).map(type => (
-                        <TouchableOpacity
-                            key={type}
-                            onPress={() => handleAddHazard(type)}
-                            style={tw`flex-row items-center gap-4 p-4 rounded-2xl mb-2 border border-zinc-800 bg-[#121212]`}
-                        >
-                            <Text style={tw`text-2xl`}>{HAZARD_EMOJI[type]}</Text>
-                            <Text style={tw`text-white font-bold text-base`}>{HAZARD_LABELS[type]}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            </Modal>
+          ))}
         </View>
-    );
+      )}
+
+      {/* Side controls: center + compass */}
+      {!isNavigating && (
+        <View style={{ position: 'absolute', left: 14, bottom: Platform.OS === 'web' ? 230 : 240, zIndex: 30, gap: 8 }}>
+          <TouchableOpacity onPress={centerOnUser}>
+            <GlassPanel style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="my-location" size={18} color={WF.cyan} />
+            </GlassPanel>
+          </TouchableOpacity>
+          <GlassPanel style={{ width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 9, fontWeight: '700', color: WF.amber, letterSpacing: 1 }}>N</Text>
+            <Text style={{ fontSize: 8, color: WF.textDim }}>↑</Text>
+          </GlassPanel>
+        </View>
+      )}
+
+      {/* Recenter (during navigation) */}
+      {isNavigating && (
+        <TouchableOpacity onPress={centerOnUser} style={{ position: 'absolute', right: 14, bottom: Platform.OS === 'web' ? 300 : 310, zIndex: 30 }}>
+          <GlassPanel style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
+            <MaterialIcons name="my-location" size={22} color={WF.text} />
+          </GlassPanel>
+        </TouchableOpacity>
+      )}
+
+      {/* Expandable FAB */}
+      <MapFAB onSOS={handleSOS} onHazard={() => setShowHazardPicker(true)} />
+
+      {/* Bottom convoy drawer */}
+      {!isNavigating && (
+        Platform.OS === 'web' ? (
+          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 210, zIndex: 20 }}>
+            {/* Fade gradient */}
+            <View style={{ position: 'absolute', inset: 0, top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none' } as any} />
+            <GlassPanel style={{ position: 'absolute', left: 12, right: 12, top: 10, bottom: 8, padding: 12, borderRadius: 22 }}>
+              <View style={{ width: 38, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', alignSelf: 'center', marginBottom: 10 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 }}>
+                <View>
+                  <Text style={{ fontSize: 9, letterSpacing: 2, color: WF.textMut, fontWeight: '700', textTransform: 'uppercase' }}>
+                    CONVOY · {users.length} CARS
+                  </Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: WF.text, letterSpacing: -0.3, marginTop: 2 }}>
+                    {convoyId ?? 'No Active Convoy'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WF.green }} />
+                  <Text style={{ fontSize: 9, color: WF.green, letterSpacing: 1.5, fontWeight: '700', textTransform: 'uppercase' }}>LIVE</Text>
+                </View>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row', paddingBottom: 4 }}>
+                {users.map(user => (
+                  <View key={user.id} style={{ width: 150, flexDirection: 'column', padding: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.025)', borderLeftWidth: 3, borderLeftColor: user.color }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: WF.text }} numberOfLines={1}>
+                      {user.id === myId ? 'You' : user.name}
+                    </Text>
+                    <Text style={{ fontSize: 9, color: WF.textMut, marginTop: 1 }}>{user.status}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: user.speed > 0 ? WF.text : WF.textDim, marginTop: 4 }}>
+                      {user.speed}<Text style={{ fontSize: 8, color: WF.textMut }}> KM/H</Text>
+                    </Text>
+                    {user.id !== myId && (
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(`https://www.waze.com/ul?ll=${user.lat},${user.lng}&navigate=yes`)}
+                        style={{ marginTop: 6, backgroundColor: 'rgba(0,212,255,0.1)', borderWidth: 1, borderColor: WF.cyan + '55', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start' }}
+                      >
+                        <Text style={{ fontSize: 9, color: WF.cyan, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 }}>Navigate</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </ScrollView>
+            </GlassPanel>
+          </View>
+        ) : (
+          <BottomSheet
+            ref={bottomSheetRef}
+            index={1}
+            snapPoints={snapPoints}
+            enablePanDownToClose={false}
+            handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.2)', width: 38, height: 4 }}
+            backgroundStyle={{ backgroundColor: 'rgba(14,14,20,0.96)', borderWidth: 1, borderColor: WF.line, borderBottomWidth: 0 }}
+          >
+            <BottomSheetView style={{ flex: 1, paddingHorizontal: 14, paddingTop: 4, paddingBottom: 8 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                <View>
+                  <Text style={{ fontSize: 9, letterSpacing: 2, color: WF.textMut, fontWeight: '700', textTransform: 'uppercase' }}>
+                    CONVOY · {users.length} CARS
+                  </Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: WF.text, marginTop: 2, letterSpacing: -0.3 }}>
+                    {convoyId ?? 'No Active Convoy'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WF.green }} />
+                  <Text style={{ fontSize: 9, color: WF.green, letterSpacing: 1.5, fontWeight: '700', textTransform: 'uppercase' }}>LIVE</Text>
+                </View>
+              </View>
+              <BottomSheetScrollView contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>
+                {users.map(user => (
+                  <DrawerRow key={user.id} user={user} isMe={user.id === myId} myId={myId} />
+                ))}
+              </BottomSheetScrollView>
+            </BottomSheetView>
+          </BottomSheet>
+        )
+      )}
+
+      {/* Status Picker Modal */}
+      <Modal visible={showStatusPicker} transparent animationType="slide" onRequestClose={() => setShowStatusPicker(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={() => setShowStatusPicker(false)} />
+        <View style={{ backgroundColor: WF.panel, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0, borderColor: WF.line }}>
+          <Text style={{ color: WF.text, fontWeight: '900', fontSize: 16, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16, textAlign: 'center' }}>My Status</Text>
+          {STATUS_OPTIONS.map(opt => (
+            <TouchableOpacity
+              key={opt.key}
+              onPress={() => { setMyStatus(opt.key); setShowStatusPicker(false); }}
+              style={[{
+                flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 16, marginBottom: 8, borderWidth: 1,
+                borderColor: myStatus === opt.key ? opt.color : WF.line,
+                backgroundColor: myStatus === opt.key ? opt.color + '14' : 'transparent',
+              }]}
+            >
+              <MaterialIcons name={opt.icon as any} size={22} color={myStatus === opt.key ? opt.color : WF.textMut} />
+              <Text style={{ fontSize: 15, fontWeight: '700', color: myStatus === opt.key ? opt.color : WF.text }}>{opt.label}</Text>
+              {myStatus === opt.key && <MaterialIcons name="check" size={18} color={opt.color} style={{ marginLeft: 'auto' } as any} />}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
+
+      {/* Hazard Picker Modal */}
+      <Modal visible={showHazardPicker} transparent animationType="slide" onRequestClose={() => setShowHazardPicker(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' }} activeOpacity={1} onPress={() => setShowHazardPicker(false)} />
+        <View style={{ backgroundColor: WF.panel, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingTop: 16, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0, borderColor: WF.line }}>
+          <Text style={{ color: WF.text, fontWeight: '900', fontSize: 16, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 6, textAlign: 'center' }}>Report Hazard</Text>
+          <Text style={{ color: WF.textMut, fontSize: 11, textAlign: 'center', marginBottom: 14 }}>Pins at your current location, visible to all members</Text>
+          {(Object.keys(HAZARD_LABELS) as HazardType[]).map(type => (
+            <TouchableOpacity key={type} onPress={() => handleAddHazard(type)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: WF.line, backgroundColor: 'rgba(255,255,255,0.03)' }}>
+              <Text style={{ fontSize: 22 }}>{HAZARD_EMOJI[type]}</Text>
+              <Text style={{ color: WF.text, fontWeight: '700', fontSize: 15 }}>{HAZARD_LABELS[type]}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Modal>
+    </View>
+  );
 }

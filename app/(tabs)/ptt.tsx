@@ -1,170 +1,309 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Platform, ScrollView, Text, TouchableOpacity, Vibration, View, useColorScheme } from 'react-native';
-import TopAppBar from '../../components/TopAppBar';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, Platform, ScrollView, Share, Text, TouchableOpacity, Vibration, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VoiceEngine from '../../components/VoiceEngine';
 import { DRIVER_STATUS_LABELS, DriverStatus, useConvoy } from '../../contexts/ConvoyContext';
 import tw from '../../lib/tailwind';
 
-const STATUS_OPTIONS: { key: DriverStatus; emoji: string; color: string }[] = [
-    { key: 'moving', emoji: '🟢', color: '#00FF66' },
-    { key: 'gas', emoji: '⛽', color: '#FFD600' },
-    { key: 'bathroom', emoji: '🚻', color: '#00D1FF' },
-    { key: 'food', emoji: '🍔', color: '#FF6A00' },
-    { key: 'car_trouble', emoji: '⚠️', color: '#FF3366' },
-    { key: 'pulling_over', emoji: '🛑', color: '#B44FFF' },
+const WF = {
+  bg: '#0A0A0F',
+  panel: '#141418',
+  amber: '#FF6A00',
+  amberHi: '#FF8A2A',
+  cyan: '#00D4FF',
+  green: '#00FF88',
+  red: '#FF2D55',
+  yellow: '#FFC400',
+  text: '#F4F4F6',
+  textMut: 'rgba(244,244,246,0.62)',
+  textDim: 'rgba(244,244,246,0.38)',
+};
+
+const STATUS_OPTIONS: { key: DriverStatus; label: string; emoji: string; dot: string }[] = [
+  { key: 'moving', label: 'Moving', emoji: '🟢', dot: WF.green },
+  { key: 'gas', label: 'Gas Stop', emoji: '⛽', dot: WF.yellow },
+  { key: 'bathroom', label: 'Restroom', emoji: '🚻', dot: WF.cyan },
+  { key: 'food', label: 'Food', emoji: '🍔', dot: WF.amberHi },
+  { key: 'car_trouble', label: 'Hazard', emoji: '⚠️', dot: WF.red },
+  { key: 'pulling_over', label: 'Pulled Over', emoji: '🅿️', dot: '#888888' },
 ];
 
-export default function PttScreen() {
-    const { users, myId, convoyId, whoIsTalking, setTalking, myStatus, setMyStatus } = useConvoy();
-    const [isTalking, setIsTalking] = useState(false);
+function PulseRing({ active, delay = 0, size = 220 }: { active: boolean; delay?: number; size?: number }) {
+  const opacity = useRef(new Animated.Value(0.7)).current;
+  const scale = useRef(new Animated.Value(1)).current;
 
-    const channels = [
-        { id: 'ALL', name: 'Convoy Broadcast', icon: 'earth', color: '#FF6A00' },
-        ...users
-            .filter(u => u.id !== myId)
-            .map(u => ({ id: u.id, name: u.name, icon: 'car-side', color: u.color })),
-    ];
-    const [activeChannelId, setActiveChannelId] = useState('ALL');
-    const activeChannel = channels.find(c => c.id === activeChannelId) ?? channels[0];
+  useEffect(() => {
+    const duration = active ? 700 : 2000;
+    const toScale = active ? 1.25 : 1.55;
 
-    // Broadcast → convoy code channel. Car-to-car → sorted ID pair so both ends compute the same name.
-    const agoraChannelId = activeChannelId === 'ALL'
-        ? (convoyId ?? '')
-        : [myId, activeChannelId].sort().join('_');
-
-    const talkingUser = whoIsTalking ? users.find(u => u.id === whoIsTalking) : null;
-
-    const handlePressIn = () => {
-        if (Platform.OS !== 'web') Vibration.vibrate(50);
-        setIsTalking(true);
-        setTalking(true);
-    };
-
-    const handlePressOut = () => {
-        setIsTalking(false);
-        setTalking(false);
-    };
-
-    return (
-        <View style={tw`flex-1 bg-[#121212]`}>
-            <TopAppBar customStyle={`absolute top-0 w-full z-50 bg-[#121212]/90 ${Platform.OS === 'web' ? 'pt-4' : 'pt-8'}`} />
-
-            <View style={tw`${Platform.OS === 'web' ? 'pt-24' : 'pt-32'} px-6 flex-1`}>
-                <View style={tw`mb-6 items-center`}>
-                    <Text style={tw`text-white font-black text-3xl tracking-tighter`}>Comm Center</Text>
-                    <Text style={tw`text-zinc-400 text-sm mt-1 uppercase tracking-widest font-bold`}>
-                        {activeChannel?.name ?? 'Convoy Broadcast'}
-                    </Text>
-                </View>
-
-                {/* "On Air" indicator */}
-                {whoIsTalking && whoIsTalking !== myId && (
-                    <View style={tw`bg-yellow-400/20 border border-yellow-400/40 rounded-2xl px-4 py-3 flex-row items-center gap-3 mb-4`}>
-                        <View style={tw`w-2 h-2 rounded-full bg-yellow-400`} />
-                        <Text style={tw`text-yellow-300 font-black text-sm uppercase tracking-widest`}>
-                            {talkingUser?.name ?? 'Someone'} is talking...
-                        </Text>
-                    </View>
-                )}
-
-                {/* Channel Selector */}
-                <View style={tw`mb-6`}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-4`}>
-                        {channels.map(channel => {
-                            const isActive = activeChannelId === channel.id;
-                            return (
-                                <TouchableOpacity
-                                    key={channel.id}
-                                    onPress={() => setActiveChannelId(channel.id)}
-                                    style={[
-                                        tw`p-4 rounded-3xl border w-36 items-center bg-[#1C1C1E]`,
-                                        isActive
-                                            ? { borderColor: channel.color, borderWidth: 2 }
-                                            : tw`border-zinc-800`,
-                                    ]}
-                                >
-                                    <MaterialCommunityIcons name={channel.icon as any} size={28} color={isActive ? channel.color : '#52525B'} />
-                                    <Text style={[tw`mt-2 font-bold text-center text-xs`, isActive ? tw`text-white` : tw`text-zinc-400`]} numberOfLines={1}>
-                                        {channel.name}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
-                </View>
-
-                {/* PTT Button */}
-                <View style={tw`flex-1 items-center justify-center`}>
-                    <View style={[
-                        tw`absolute w-[300px] h-[300px] rounded-full border items-center justify-center`,
-                        isTalking
-                            ? { borderColor: `${activeChannel?.color ?? '#FF6A00'}40`, backgroundColor: `${activeChannel?.color ?? '#FF6A00'}10` }
-                            : tw`border-zinc-800/50`,
-                    ]}>
-                        {isTalking && (
-                            <MaterialCommunityIcons name="access-point" size={90} color={activeChannel?.color ?? '#FF6A00'} style={tw`absolute -top-10 opacity-50`} />
-                        )}
-                    </View>
-
-                    <TouchableOpacity
-                        onPressIn={handlePressIn}
-                        onPressOut={handlePressOut}
-                        activeOpacity={0.9}
-                        delayLongPress={0}
-                        {...(Platform.OS === 'web' ? {
-                            onPointerDown: handlePressIn,
-                            onPointerUp: handlePressOut,
-                            onPointerLeave: handlePressOut,
-                        } : {})}
-                        onContextMenu={(e: any) => {
-                            if (Platform.OS === 'web') e.preventDefault();
-                        }}
-                        hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-                        style={[
-                            tw`w-52 h-52 rounded-full items-center justify-center shadow-2xl`,
-                            isTalking
-                                ? { backgroundColor: activeChannel?.color ?? '#FF6A00' }
-                                : { backgroundColor: '#1C1C1E', borderWidth: 4, borderColor: activeChannel?.color ?? '#FF6A00' },
-                            Platform.OS === 'web' && { cursor: 'pointer', userSelect: 'none' } as any
-                        ]}
-                    >
-                        <MaterialCommunityIcons name="microphone-variant" size={72} color={isTalking ? 'white' : (activeChannel?.color ?? '#FF6A00')} pointerEvents="none" />
-                        <Text style={[tw`font-black text-lg uppercase tracking-widest mt-1`, { color: isTalking ? 'white' : (activeChannel?.color ?? '#FF6A00') }]} pointerEvents="none">
-                            {isTalking ? 'Transmitting' : 'Hold To Talk'}
-                        </Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* Quick Status Strip */}
-                <View style={tw`pb-28`}>
-                    <Text style={tw`text-zinc-400 text-[10px] font-black uppercase tracking-widest mb-3 text-center`}>
-                        My Status — tap to broadcast
-                    </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={tw`gap-2 justify-center flex-row px-2`}>
-                        {STATUS_OPTIONS.map(opt => {
-                            const isActive = myStatus === opt.key;
-                            return (
-                                <TouchableOpacity
-                                    key={opt.key}
-                                    onPress={() => setMyStatus(opt.key)}
-                                    style={[
-                                        tw`px-3 py-2 rounded-full border flex-row items-center gap-1.5`,
-                                        isActive
-                                            ? { backgroundColor: opt.color + '25', borderColor: opt.color }
-                                            : tw`border-zinc-800 bg-[#1C1C1E]`,
-                                    ]}
-                                >
-                                    <Text style={tw`text-sm`}>{opt.emoji}</Text>
-                                    <Text style={[tw`text-[11px] font-bold`, isActive ? { color: opt.color } : tw`text-zinc-500`]}>
-                                        {DRIVER_STATUS_LABELS[opt.key].replace('Stopping — ', '').replace('⚠️ ', '')}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </ScrollView>
-                </View>
-            </View>
-        </View>
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: toScale, duration, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+          Animated.timing(opacity, { toValue: 0, duration, useNativeDriver: true }),
+        ]),
+        Animated.parallel([
+          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.7, duration: 0, useNativeDriver: true }),
+        ]),
+      ])
     );
+    anim.start();
+    return () => anim.stop();
+  }, [active, delay]);
+
+  return (
+    <Animated.View style={{
+      position: 'absolute',
+      width: size, height: size, borderRadius: size / 2,
+      borderWidth: active ? 2 : 1.5,
+      borderColor: WF.amber,
+      opacity,
+      transform: [{ scale }],
+    }} />
+  );
+}
+
+export default function PttScreen() {
+  const { users, myId, convoyId, whoIsTalking, setTalking, myStatus, setMyStatus } = useConvoy();
+  const insets = useSafeAreaInsets();
+  const [isTalking, setIsTalking] = useState(false);
+  const topPad = Platform.OS === 'web' ? 24 : insets.top + 4;
+
+  const channels = [
+    { id: 'ALL', name: 'Convoy', color: WF.amber },
+    ...(users.filter(u => u.id !== myId).slice(0, 2).map(u => ({ id: u.id, name: u.name, color: u.color }))),
+  ];
+  while (channels.length < 3) {
+    channels.push({ id: `pad_${channels.length}`, name: channels.length === 1 ? 'Lead Only' : 'Squad B', color: WF.textMut });
+  }
+
+  const [activeChannelId, setActiveChannelId] = useState('ALL');
+
+  const talkingUser = whoIsTalking ? users.find(u => u.id === whoIsTalking) : null;
+
+  const handlePressIn = () => {
+    if (Platform.OS !== 'web') Vibration.vibrate(50);
+    setIsTalking(true);
+    setTalking(true);
+  };
+
+  const handlePressOut = () => {
+    setIsTalking(false);
+    setTalking(false);
+  };
+
+  const activeLabel = channels.find(c => c.id === activeChannelId)?.name ?? 'Convoy';
+
+  return (
+    <View style={{ flex: 1, backgroundColor: WF.bg }}>
+      <VoiceEngine />
+
+      {/* Ambient glow when active */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute', inset: 0, top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: isTalking ? 'rgba(255,106,0,0.09)' : 'transparent',
+        } as any}
+      />
+
+      <View style={{ flex: 1, paddingTop: topPad }}>
+
+        {/* ── Top header ───────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 12, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 2, color: WF.textMut, textTransform: 'uppercase' }}>
+              COMM · CH 01
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WF.green }} />
+              <Text style={{ fontSize: 10, color: WF.green, letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: '700' }}>
+                LINK · {users.length > 0 ? 'STRONG' : 'SEARCHING'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Channel pill selector */}
+          <View style={{
+            flexDirection: 'row', padding: 4, borderRadius: 999,
+            backgroundColor: 'rgba(20,20,24,0.9)',
+            borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+            gap: 2,
+          }}>
+            {channels.slice(0, 3).map((ch) => {
+              const sel = activeChannelId === ch.id;
+              return (
+                <TouchableOpacity
+                  key={ch.id}
+                  onPress={() => setActiveChannelId(ch.id)}
+                  style={{
+                    flex: 1, paddingVertical: 10, borderRadius: 999, alignItems: 'center',
+                    backgroundColor: sel ? WF.amber : 'transparent',
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase',
+                    color: sel ? '#0A0A0F' : WF.textMut,
+                  }}>{ch.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ── ON AIR listener strip ──────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 2, color: WF.textMut, textTransform: 'uppercase' }}>
+            ON AIR
+          </Text>
+          <View style={{ flexDirection: 'row' }}>
+            {users.slice(0, 5).map((u, i) => (
+              <View key={u.id} style={{
+                width: 28, height: 28, borderRadius: 14,
+                backgroundColor: u.color + '99',
+                borderWidth: 2, borderColor: WF.bg,
+                alignItems: 'center', justifyContent: 'center',
+                marginLeft: i === 0 ? 0 : -8,
+                zIndex: 5 - i,
+              }}>
+                <Text style={{ fontSize: 9, fontWeight: '900', color: '#0A0A0F', letterSpacing: 0.5 }}>
+                  {u.name[0]?.toUpperCase()}
+                </Text>
+              </View>
+            ))}
+          </View>
+          {users.length > 0 && (
+            <Text style={{ fontSize: 10, color: WF.textMut, marginLeft: 4 }}>
+              {users.length} listening
+            </Text>
+          )}
+        </View>
+
+        {/* ── Transcript ────────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 28, paddingVertical: 16, minHeight: 80, alignItems: 'center', justifyContent: 'center' }}>
+          {isTalking ? (
+            <>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: WF.amber, letterSpacing: 2, marginBottom: 6, textTransform: 'uppercase' }}>
+                YOU · LIVE
+              </Text>
+              <Text style={{ fontSize: 17, color: WF.text, fontWeight: '600', lineHeight: 24, letterSpacing: -0.3, textAlign: 'center' }}>
+                Transmitting to {activeLabel}...
+              </Text>
+            </>
+          ) : talkingUser && whoIsTalking !== myId ? (
+            <>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: WF.textMut, letterSpacing: 2, marginBottom: 6, textTransform: 'uppercase' }}>
+                {talkingUser.name.toUpperCase()} · LIVE
+              </Text>
+              <Text style={{ fontSize: 17, color: WF.textMut, fontStyle: 'italic', lineHeight: 24, textAlign: 'center' }}>
+                Speaking on channel...
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={{ fontSize: 10, fontWeight: '700', color: WF.textMut, letterSpacing: 2, marginBottom: 6, textTransform: 'uppercase' }}>
+                CHANNEL CLEAR
+              </Text>
+              <Text style={{ fontSize: 17, color: WF.textDim, fontStyle: 'italic', lineHeight: 24, textAlign: 'center' }}>
+                Hold the button to transmit
+              </Text>
+            </>
+          )}
+        </View>
+
+        {/* ── PTT Button ───────────────────────────────────────────── */}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 280, height: 280, alignItems: 'center', justifyContent: 'center' }}>
+            <PulseRing active={isTalking} delay={0} />
+            <PulseRing active={isTalking} delay={isTalking ? 350 : 700} />
+            {!isTalking && <PulseRing active={false} delay={1400} />}
+
+            <TouchableOpacity
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              activeOpacity={0.9}
+              delayLongPress={0}
+              {...(Platform.OS === 'web' ? {
+                onPointerDown: handlePressIn,
+                onPointerUp: handlePressOut,
+                onPointerLeave: handlePressOut,
+                onContextMenu: (e: any) => e.preventDefault(),
+              } as any : {})}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+              style={{
+                width: 220, height: 220, borderRadius: 110,
+                backgroundColor: isTalking ? WF.amber : 'rgba(10,10,15,0.95)',
+                borderWidth: 2, borderColor: WF.amber,
+                alignItems: 'center', justifyContent: 'center',
+                shadowColor: WF.amber,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: isTalking ? 0.9 : 0.25,
+                shadowRadius: isTalking ? 50 : 22,
+                elevation: isTalking ? 20 : 6,
+                ...(Platform.OS === 'web' ? { cursor: 'pointer', userSelect: 'none' } as any : {}),
+              }}
+            >
+              <MaterialCommunityIcons
+                name="microphone-variant"
+                size={64}
+                color={isTalking ? '#0A0A0F' : WF.amber}
+                pointerEvents="none"
+              />
+              <Text
+                style={{ fontSize: 11, fontWeight: '800', letterSpacing: 3.5, marginTop: 8, color: isTalking ? '#0A0A0F' : WF.amber, textTransform: 'uppercase' }}
+                pointerEvents="none"
+              >
+                {isTalking ? 'TRANSMITTING' : 'HOLD TO TALK'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ── Status chip strip ────────────────────────────────────── */}
+        <View style={{ paddingBottom: Platform.OS === 'web' ? 96 : insets.bottom + 78 }}>
+          <View style={{ paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ fontSize: 9, letterSpacing: 2, color: WF.textMut, fontWeight: '700', textTransform: 'uppercase' }}>
+              BROADCAST STATUS
+            </Text>
+            <Text style={{ fontSize: 9, color: WF.textDim, letterSpacing: 1, textTransform: 'uppercase' }}>
+              TAP TO SEND
+            </Text>
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 14, gap: 8, flexDirection: 'row' }}
+          >
+            {STATUS_OPTIONS.map(opt => {
+              const sel = myStatus === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={() => setMyStatus(opt.key)}
+                  style={{
+                    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999,
+                    backgroundColor: sel ? opt.dot + '1e' : 'rgba(255,255,255,0.04)',
+                    borderWidth: 1,
+                    borderColor: sel ? opt.dot + 'aa' : 'rgba(255,255,255,0.08)',
+                    flexDirection: 'row', alignItems: 'center', gap: 7,
+                    shadowColor: sel ? opt.dot : 'transparent',
+                    shadowOpacity: sel ? 0.3 : 0,
+                    shadowRadius: 8, elevation: sel ? 4 : 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 14 }}>{opt.emoji}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: sel ? opt.dot : WF.text, letterSpacing: 0.4 }}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </View>
+    </View>
+  );
 }
