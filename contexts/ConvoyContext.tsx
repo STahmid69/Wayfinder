@@ -417,55 +417,95 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
 
         // GPS tracking
         (async () => {
+            const handleLocationUpdate = async (lat: number, lng: number, speed: number) => {
+                if (lastPositionRef.current) {
+                    const d = haversineKm(lastPositionRef.current.lat, lastPositionRef.current.lng, lat, lng);
+                    if (d < 0.5) {
+                        totalDistanceRef.current += d;
+                        setTotalDistanceKm(totalDistanceRef.current);
+                    }
+                }
+                lastPositionRef.current = { lat, lng };
+
+                const payload: ConvoyMember = {
+                    id: myIdRef.current,
+                    name: myNameRef.current || 'Driver',
+                    color: myColorRef.current,
+                    lat, lng, speed,
+                    status: myStatusRef.current === 'moving'
+                        ? (speed > 0 ? 'Moving' : 'Stopped')
+                        : DRIVER_STATUS_LABELS[myStatusRef.current],
+                    driverStatus: myStatusRef.current,
+                    role: myRoleRef.current,
+                    isTalking: isTalkingRef.current,
+                    lastSeen: Date.now(),
+                };
+                setUsers(prev => {
+                    const idx = prev.findIndex(u => u.id === myIdRef.current);
+                    if (idx >= 0) { const n = [...prev]; n[idx] = payload; return n; }
+                    return [...prev, payload];
+                });
+                try {
+                    if (channelRef.current) await channelRef.current.track(payload);
+                } catch (_) {}
+            };
+
+            if (Platform.OS === 'web') {
+                // Use navigator.geolocation directly on web — expo-location's watchPositionAsync
+                // only fires on movement (not on a timer), so stationary desktop users never
+                // get their location broadcast after the initial call.
+                if (typeof navigator === 'undefined' || !navigator.geolocation) {
+                    showToast('Geolocation not supported in this browser', '📍', '#FF6A00');
+                    return;
+                }
+                const geoOptions = { enableHighAccuracy: false, timeout: 15000, maximumAge: 30000 };
+                const onPos = (pos: GeolocationPosition) => {
+                    handleLocationUpdate(
+                        pos.coords.latitude,
+                        pos.coords.longitude,
+                        Math.max(0, Math.round((pos.coords.speed || 0) * 3.6)),
+                    );
+                };
+                const onErr = () => {
+                    showToast('Location blocked — allow it in browser settings', '📍', '#FF6A00');
+                };
+                navigator.geolocation.getCurrentPosition(onPos, onErr, geoOptions);
+                const watchId = navigator.geolocation.watchPosition(onPos, onErr, geoOptions);
+                // Re-track every 10 s so Supabase Presence stays current when stationary
+                const reTrackInterval = setInterval(() => {
+                    if (lastPositionRef.current && channelRef.current) {
+                        channelRef.current.track(buildPresencePayload()).catch(() => {});
+                    }
+                }, 10000);
+                locationSubRef.current = {
+                    remove: () => {
+                        navigator.geolocation.clearWatch(watchId);
+                        clearInterval(reTrackInterval);
+                    },
+                };
+                return;
+            }
+
+            // Native (iOS / Android) path
             try {
                 const { status } = await Location.requestForegroundPermissionsAsync();
                 if (status !== 'granted') return;
 
-                const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                 const handleLocation = async (loc: Location.LocationObject) => {
-                    const speed = Math.max(0, Math.round((loc.coords.speed || 0) * 3.6));
-                    const lat = loc.coords.latitude;
-                    const lng = loc.coords.longitude;
-
-                    // Accumulate distance
-                    if (lastPositionRef.current) {
-                        const d = haversineKm(lastPositionRef.current.lat, lastPositionRef.current.lng, lat, lng);
-                        if (d < 0.5) { // ignore teleports / GPS jumps
-                            totalDistanceRef.current += d;
-                            setTotalDistanceKm(totalDistanceRef.current);
-                        }
-                    }
-                    lastPositionRef.current = { lat, lng };
-
-                    const payload: ConvoyMember = {
-                        id: myIdRef.current,
-                        name: myNameRef.current || 'Driver',
-                        color: myColorRef.current,
-                        lat,
-                        lng,
-                        speed,
-                        status: myStatusRef.current === 'moving'
-                            ? (speed > 0 ? 'Moving' : 'Stopped')
-                            : DRIVER_STATUS_LABELS[myStatusRef.current],
-                        driverStatus: myStatusRef.current,
-                        role: myRoleRef.current,
-                        isTalking: isTalkingRef.current,
-                        lastSeen: Date.now(),
-                    };
-                    setUsers(prev => {
-                        const idx = prev.findIndex(u => u.id === myIdRef.current);
-                        if (idx >= 0) { const n = [...prev]; n[idx] = payload; return n; }
-                        return [...prev, payload];
-                    });
-                    if (channelRef.current) await channelRef.current.track(payload);
+                    await handleLocationUpdate(
+                        loc.coords.latitude,
+                        loc.coords.longitude,
+                        Math.max(0, Math.round((loc.coords.speed || 0) * 3.6)),
+                    );
                 };
 
+                const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
                 handleLocation(initial);
                 locationSubRef.current = await Location.watchPositionAsync(
-                    { accuracy: Platform.OS === 'web' ? Location.Accuracy.Balanced : Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
+                    { accuracy: Location.Accuracy.High, timeInterval: 5000, distanceInterval: 10 },
                     handleLocation
                 );
-            } catch (_) { }
+            } catch (_) {}
         })();
 
         return () => {

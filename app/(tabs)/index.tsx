@@ -347,6 +347,18 @@ export default function ConvoyRadarScreen() {
       <SearchPanel />
       <NavigationPanel currentSpeed={me?.speed ?? 0} />
 
+      {/* GPS unavailable warning (web only) */}
+      {Platform.OS === 'web' && !meHasGps && !!convoyId && (
+        <View style={{ position: 'absolute', top: topPad + 60, left: 12, right: 12, zIndex: 30 }}>
+          <View style={{ backgroundColor: '#FF6A00', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 15 }}>📍</Text>
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12, flex: 1, lineHeight: 17 }}>
+              {'Allow location in your browser — your convoy can\'t see you until you do'}
+            </Text>
+          </View>
+        </View>
+      )}
+
       {/* SOS alerts */}
       {sosAlerts.length > 0 && (
         <View style={{ position: 'absolute', top: topPad + 70, left: 12, right: 12, zIndex: 30 }}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, useColorScheme } from 'react-native';
+import { View, Text, TouchableOpacity, useColorScheme, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import tw from '../lib/tailwind';
 import { useNavigation } from '../contexts/NavigationContext';

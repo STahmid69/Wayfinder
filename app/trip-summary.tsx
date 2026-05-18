@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React from 'react';
 import { Share, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PastConvoy } from '../contexts/ConvoyContext';
+import { PastConvoy, useConvoy } from '../contexts/ConvoyContext';
 import tw from '../lib/tailwind';
 
 function StatRow({ icon, label, value, color = '#FF6A00' }: { icon: string; label: string; value: string; color?: string }) {
