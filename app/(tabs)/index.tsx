@@ -359,9 +359,9 @@ export default function ConvoyRadarScreen() {
         </View>
       )}
 
-      {/* SOS alerts */}
+      {/* SOS alerts — offset extra when GPS banner is also showing */}
       {sosAlerts.length > 0 && (
-        <View style={{ position: 'absolute', top: topPad + 70, left: 12, right: 12, zIndex: 30 }}>
+        <View style={{ position: 'absolute', top: topPad + (Platform.OS === 'web' && !meHasGps && !!convoyId ? 115 : 70), left: 12, right: 12, zIndex: 30 }}>
           {sosAlerts.map(sos => (
             <View key={sos.id} style={{ backgroundColor: WF.red, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
