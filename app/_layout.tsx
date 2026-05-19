@@ -18,7 +18,37 @@ function WebWrapper({ children }: { children: React.ReactNode }) {
             // Using margin: '0 auto' for more stable centering of absolute children on web
         }}>
             <style dangerouslySetInnerHTML={{ __html: `
-                body { background-color: #000; margin: 0; padding: 0; overflow: hidden; height: 100vh; }
+                body {
+                    background-color: #000;
+                    margin: 0;
+                    padding: 0;
+                    overflow: hidden;
+                    height: 100vh;
+                    -webkit-user-select: none;
+                    -moz-user-select: none;
+                    -ms-user-select: none;
+                    user-select: none;
+                    -webkit-touch-callout: none;
+                    -webkit-tap-highlight-color: transparent;
+                }
+                
+                /* Ensure all children except inputs/textareas inherit user-select: none and touch-callout: none */
+                *, *::before, *::after {
+                    -webkit-user-select: inherit;
+                    -moz-user-select: inherit;
+                    -ms-user-select: inherit;
+                    user-select: inherit;
+                    -webkit-touch-callout: inherit;
+                }
+                
+                /* Explicitly allow selection/editing on text fields and editable elements */
+                input, textarea, [contenteditable="true"] {
+                    -webkit-user-select: text !important;
+                    -moz-user-select: text !important;
+                    -ms-user-select: text !important;
+                    user-select: text !important;
+                }
+
                 /* Custom scrollbar for web */
                 ::-webkit-scrollbar { width: 6px; }
                 ::-webkit-scrollbar-track { background: transparent; }

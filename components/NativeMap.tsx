@@ -12,7 +12,16 @@ const LEAFLET_HTML = (isDark: boolean, lat: number, lng: number, zoom: number) =
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  * { margin:0; padding:0; }
+  * {
+    margin:0;
+    padding:0;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
   html,body,#map { width:100%; height:100%; }
   .leaflet-control-zoom { display:none !important; }
   .leaflet-control-attribution { font-size:8px !important; opacity:0.6; }

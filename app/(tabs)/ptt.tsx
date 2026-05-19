@@ -2,7 +2,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, ScrollView, Share, Text, TouchableOpacity, Vibration, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import VoiceEngine from '../../components/VoiceEngine';
 import { DRIVER_STATUS_LABELS, DriverStatus, useConvoy } from '../../contexts/ConvoyContext';
 import tw from '../../lib/tailwind';
 
@@ -161,8 +160,6 @@ export default function PttScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: WF.bg }}>
-      <VoiceEngine />
-
       {/* Ambient glow when active */}
       <View
         pointerEvents="none"
