@@ -183,7 +183,7 @@ if (canUseNotifications) {
 }
 
 export function ConvoyProvider({ children }: { children: React.ReactNode }) {
-    const { session, loading } = useAuth();
+    useAuth(); // keep AuthProvider mounted; realtime uses anon key, no JWT wait needed
     // Synchronous initial state for Web to prevent redirect flickers
     const getInitial = (key: string) => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -339,7 +339,6 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
 
     // Connect to Supabase when convoyId is set
     useEffect(() => {
-        if (loading) return; // Wait for Auth loading to complete (anonymous guest sign-in)
         if (!convoyId || !myId) {
             setRealtimeStatus('idle');
             return;
@@ -607,7 +606,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
             if (channelRef.current) supabase.removeChannel(channelRef.current);
             if (locationSubRef.current?.remove) locationSubRef.current.remove();
         };
-    }, [convoyId, myId, loading]);
+    }, [convoyId, myId]);
 
     // ─── Identity ────────────────────────────────────────────────────────────
     const setIdentity = async (name: string, color: string) => {
