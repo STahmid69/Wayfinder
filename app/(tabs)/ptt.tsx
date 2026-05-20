@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, ScrollView, Share, Text, TouchableOpacity, Vibration, View } from 'react-native';
+import { Animated, Easing, Platform, ScrollView, Share, Text, TouchableOpacity, Vibration, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DRIVER_STATUS_LABELS, DriverStatus, useConvoy } from '../../contexts/ConvoyContext';
 import tw from '../../lib/tailwind';
@@ -131,6 +131,7 @@ export default function PttScreen() {
   const { users, myId, convoyId, whoIsTalking, setTalking, myStatus, setMyStatus } = useConvoy();
   const insets = useSafeAreaInsets();
   const [isTalking, setIsTalking] = useState(false);
+  const [isLatchMode, setIsLatchMode] = useState(false);
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 4;
 
   const channels = [
@@ -146,14 +147,25 @@ export default function PttScreen() {
   const talkingUser = whoIsTalking ? users.find(u => u.id === whoIsTalking) : null;
 
   const handlePressIn = () => {
+    if (isLatchMode) return;
     if (Platform.OS !== 'web') Vibration.vibrate(50);
     setIsTalking(true);
     setTalking(true);
   };
 
   const handlePressOut = () => {
+    if (isLatchMode) return;
     setIsTalking(false);
     setTalking(false);
+  };
+
+  const handlePress = () => {
+    if (isLatchMode) {
+      if (Platform.OS !== 'web') Vibration.vibrate(50);
+      const nextTalking = !isTalking;
+      setIsTalking(nextTalking);
+      setTalking(nextTalking);
+    }
   };
 
   const activeLabel = channels.find(c => c.id === activeChannelId)?.name ?? 'Convoy';
@@ -267,10 +279,50 @@ export default function PttScreen() {
                 CHANNEL CLEAR
               </Text>
               <Text style={{ fontSize: 17, color: WF.textDim, fontStyle: 'italic', lineHeight: 24, textAlign: 'center' }}>
-                Hold the button to transmit
+                {isLatchMode ? 'Tap the button to transmit' : 'Hold the button to transmit'}
               </Text>
             </>
           )}
+        </View>
+
+        {/* ── Mode Toggle Switch ───────────────────────────────────── */}
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: -10, zIndex: 10 }}>
+          <TouchableOpacity
+            onPress={() => {
+              if (Platform.OS !== 'web') Vibration.vibrate(20);
+              // Turn off talk state when switching modes to prevent stuck audio
+              setIsTalking(false);
+              setTalking(false);
+              setIsLatchMode(!isLatchMode);
+            }}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(20, 20, 24, 0.85)',
+              borderWidth: 1,
+              borderColor: isLatchMode ? 'rgba(255, 106, 0, 0.4)' : 'rgba(255, 255, 255, 0.08)',
+              borderRadius: 20,
+              paddingVertical: 6,
+              paddingHorizontal: 14,
+              gap: 8,
+            }}
+          >
+            <MaterialCommunityIcons
+              name={isLatchMode ? "lock" : "gesture-tap-hold"}
+              size={14}
+              color={isLatchMode ? WF.amber : WF.textDim}
+            />
+            <Text style={{
+              fontSize: 10,
+              fontWeight: '700',
+              color: isLatchMode ? WF.amber : WF.textMut,
+              letterSpacing: 1.2,
+              textTransform: 'uppercase',
+            }}>
+              Mode: {isLatchMode ? 'Latch (Tap)' : 'Hold to Talk'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── PTT Button ───────────────────────────────────────────── */}
@@ -282,15 +334,15 @@ export default function PttScreen() {
             <PulseRing active={isTalking} delay={isTalking ? 350 : 700} />
             {!isTalking && <PulseRing active={false} delay={1400} />}
 
-            <TouchableOpacity
+            <Pressable
               onPressIn={handlePressIn}
               onPressOut={handlePressOut}
-              activeOpacity={0.9}
-              delayLongPress={0}
+              onPress={handlePress}
+              pressRetentionOffset={{ top: 150, bottom: 150, left: 150, right: 150 }}
               {...(Platform.OS === 'web' ? {
-                onPointerDown: handlePressIn,
-                onPointerUp: handlePressOut,
-                onPointerLeave: handlePressOut,
+                onPointerDown: isLatchMode ? undefined : handlePressIn,
+                onPointerUp: isLatchMode ? undefined : handlePressOut,
+                onPointerLeave: isLatchMode ? undefined : handlePressOut,
                 onContextMenu: (e: any) => e.preventDefault(),
               } as any : {})}
               hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
@@ -317,9 +369,9 @@ export default function PttScreen() {
                 style={{ fontSize: 11, fontWeight: '800', letterSpacing: 3.5, marginTop: 8, color: isTalking ? '#0A0A0F' : WF.amber, textTransform: 'uppercase' }}
                 pointerEvents="none"
               >
-                {isTalking ? 'TRANSMITTING' : 'HOLD TO TALK'}
+                {isTalking ? 'TRANSMITTING' : isLatchMode ? 'TAP TO TALK' : 'HOLD TO TALK'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         </View>
 

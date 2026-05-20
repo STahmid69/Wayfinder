@@ -121,18 +121,27 @@ function VoteCard({ vote }: { vote: Vote }) {
 }
 
 export default function SocialHubScreen() {
-  const { messages, votes, sendMessage, myId, users, convoyId } = useConvoy();
+  const { messages, votes, sendMessage, myId, users, convoyId, realtimeStatus } = useConvoy();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<'CHAT' | 'VOTES' | 'MEMBERS'>('CHAT');
   const [text, setText] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [showPropose, setShowPropose] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 4;
+  const isRealtimeConnected = realtimeStatus === 'connected';
 
-  const handleSend = () => {
-    if (!text.trim()) return;
-    sendMessage(text.trim());
+  const handleSend = async () => {
+    const content = text.trim();
+    if (!content || isSending) return;
+    setIsSending(true);
     setText('');
+    const sent = await sendMessage(content);
+    setIsSending(false);
+    if (!sent) {
+      setText(content);
+      return;
+    }
     setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
   };
 
@@ -218,7 +227,7 @@ export default function SocialHubScreen() {
                   </View>
                   {isMe && (
                     <Text style={{ fontSize: 9, color: WF.textDim, letterSpacing: 1, marginRight: 4, textTransform: 'uppercase' }}>
-                      {new Date(item.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · DELIVERED
+                      {new Date(item.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · SENT
                     </Text>
                   )}
                 </View>
@@ -228,12 +237,13 @@ export default function SocialHubScreen() {
           {/* Input */}
           <View style={{ padding: 12, paddingBottom: Platform.OS === 'web' ? 96 : insets.bottom + 78, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(20,20,24,0.9)', borderWidth: 1, borderColor: WF.line, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 }}>
-              <TextInput value={text} onChangeText={setText} placeholder="Message convoy…" placeholderTextColor={WF.textDim} returnKeyType="send" onSubmitEditing={handleSend}
+              <TextInput value={text} onChangeText={setText} placeholder={isRealtimeConnected ? 'Message convoy…' : 'Connecting to convoy…'} placeholderTextColor={WF.textDim} returnKeyType="send" onSubmitEditing={handleSend}
+                editable={isRealtimeConnected && !isSending}
                 style={{ flex: 1, color: WF.text, fontSize: 13 }} />
             </View>
-            <TouchableOpacity onPress={handleSend} disabled={!text.trim()}
-              style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: text.trim() ? WF.amber : 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', shadowColor: WF.amber, shadowOpacity: text.trim() ? 0.4 : 0, shadowRadius: 10, elevation: 4 }}>
-              <MaterialIcons name="arrow-upward" size={20} color={text.trim() ? '#0A0A0F' : WF.textDim} />
+            <TouchableOpacity onPress={handleSend} disabled={!text.trim() || isSending || !isRealtimeConnected}
+              style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: text.trim() && !isSending && isRealtimeConnected ? WF.amber : 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', shadowColor: WF.amber, shadowOpacity: text.trim() && !isSending && isRealtimeConnected ? 0.4 : 0, shadowRadius: 10, elevation: 4 }}>
+              <MaterialIcons name="arrow-upward" size={20} color={text.trim() && !isSending && isRealtimeConnected ? '#0A0A0F' : WF.textDim} />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

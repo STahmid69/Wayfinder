@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useDeviceContext } from 'twrnc';
 import { useConvoy } from '../../contexts/ConvoyContext';
 import VoiceEngine from '../../components/VoiceEngine';
@@ -35,6 +35,10 @@ export default function TabLayout() {
   useDeviceContext(tw);
   const { convoyId, joinConvoy } = useConvoy();
   const [code, setCode] = useState('');
+  const { width } = useWindowDimensions();
+  const isMobileWeb = Platform.OS === 'web' && width <= 640;
+  const tabBarHeight = Platform.OS === 'web' ? (isMobileWeb ? 116 : 90) : 88;
+  const tabBarPaddingBottom = Platform.OS === 'web' ? (isMobileWeb ? 40 : 20) : 24;
 
   if (!convoyId) {
     return (
@@ -97,10 +101,10 @@ export default function TabLayout() {
           tabBarInactiveTintColor: INACTIVE,
           tabBarStyle: {
             backgroundColor: BG,
-            height: Platform.OS === 'web' ? 90 : 88,
+            height: tabBarHeight,
             borderTopWidth: 1,
             borderTopColor: 'rgba(255,255,255,0.06)',
-            paddingBottom: Platform.OS === 'web' ? 20 : 24,
+            paddingBottom: tabBarPaddingBottom,
             paddingTop: Platform.OS === 'web' ? 8 : 8,
           },
           tabBarLabelStyle: {

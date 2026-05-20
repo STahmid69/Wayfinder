@@ -170,7 +170,7 @@ export default function ConvoyRadarScreen() {
   const hasCenteredRef = useRef(false);
   const insets = useSafeAreaInsets();
 
-  const { users, myId, convoyId, hazardPins, sosAlerts, myStatus, addHazardPin, sendSOS, dismissSOS, setMyStatus } = useConvoy();
+  const { users, myId, convoyId, realtimeStatus, hazardPins, sosAlerts, myStatus, addHazardPin, sendSOS, dismissSOS, setMyStatus } = useConvoy();
   const nav = useNavigation();
 
   const me = users.find(u => u.id === myId);
@@ -250,6 +250,9 @@ export default function ConvoyRadarScreen() {
 
   const isNavigating = nav.mode === 'navigating';
   const topPad = Platform.OS === 'web' ? 20 : insets.top + 8;
+  const isRealtimeConnected = realtimeStatus === 'connected';
+  const liveLabel = realtimeStatus === 'connecting' ? 'CONNECTING' : isRealtimeConnected ? 'LIVE' : 'OFFLINE';
+  const liveColor = isRealtimeConnected ? WF.green : realtimeStatus === 'connecting' ? WF.yellow : WF.red;
 
   return (
     <View style={{ flex: 1, backgroundColor: WF.bg }}>
@@ -431,8 +434,8 @@ export default function ConvoyRadarScreen() {
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WF.green }} />
-                  <Text style={{ fontSize: 9, color: WF.green, letterSpacing: 1.5, fontWeight: '700', textTransform: 'uppercase' }}>LIVE</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: liveColor }} />
+                  <Text style={{ fontSize: 9, color: liveColor, letterSpacing: 1.5, fontWeight: '700', textTransform: 'uppercase' }}>{liveLabel}</Text>
                 </View>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, flexDirection: 'row', paddingBottom: 4 }}>
@@ -494,8 +497,8 @@ export default function ConvoyRadarScreen() {
                   </Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WF.green }} />
-                  <Text style={{ fontSize: 9, color: WF.green, letterSpacing: 1.5, fontWeight: '700', textTransform: 'uppercase' }}>LIVE</Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: liveColor }} />
+                  <Text style={{ fontSize: 9, color: liveColor, letterSpacing: 1.5, fontWeight: '700', textTransform: 'uppercase' }}>{liveLabel}</Text>
                 </View>
               </View>
               <BottomSheetScrollView contentContainerStyle={{ gap: 6, paddingBottom: 4 }}>

@@ -80,7 +80,7 @@ export default function OnboardingScreen() {
                         ]}
                     >
                         <Text style={tw`text-white font-black text-lg uppercase tracking-widest`}>
-                            Let's Roll
+                            Let&apos;s Roll
                         </Text>
                     </TouchableOpacity>
                 </View>

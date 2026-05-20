@@ -5,12 +5,14 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { Platform } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { showToast } from '../components/Toast';
+import { useAuth } from './AuthContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type DriverStatus = 'moving' | 'gas' | 'bathroom' | 'food' | 'car_trouble' | 'pulling_over';
 export type ConvoyRole = 'leader' | 'tail' | 'driver';
 export type HazardType = 'speed_trap' | 'pothole' | 'accident' | 'road_closed' | 'construction';
+export type RealtimeStatus = 'idle' | 'connecting' | 'connected' | 'disconnected';
 
 export type ConvoyMember = {
     id: string;
@@ -104,13 +106,14 @@ type ConvoyContextType = {
     sosAlerts: SOSAlert[];
     whoIsTalking: string | null;
     isTalkingLocally: boolean;
+    realtimeStatus: RealtimeStatus;
     tripStartTime: number | null;
     totalDistanceKm: number;
     setIdentity: (name: string, color: string) => Promise<void>;
     joinConvoy: (code: string) => void;
     leaveConvoy: () => void;
     endConvoy: () => Promise<void>;
-    sendMessage: (content: string) => void;
+    sendMessage: (content: string) => Promise<boolean>;
     addLedgerItem: (description: string, amount: number) => void;
     proposeVote: (title: string, options: string[]) => void;
     castVote: (voteId: string, optionId: string) => void;
@@ -180,6 +183,7 @@ if (canUseNotifications) {
 }
 
 export function ConvoyProvider({ children }: { children: React.ReactNode }) {
+    const { session, loading } = useAuth();
     // Synchronous initial state for Web to prevent redirect flickers
     const getInitial = (key: string) => {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -203,11 +207,13 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     const [sosAlerts, setSOSAlerts] = useState<SOSAlert[]>([]);
     const [whoIsTalking, setWhoIsTalking] = useState<string | null>(null);
     const [isTalkingLocally, setIsTalkingLocally] = useState(false);
+    const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('idle');
     const [tripStartTime, setTripStartTime] = useState<number | null>(null);
     const [totalDistanceKm, setTotalDistanceKm] = useState(0);
 
     const channelRef = useRef<any>(null);
     const locationSubRef = useRef<any>(null);
+    const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const myNameRef = useRef(myName);
     const myColorRef = useRef(myColor);
     const myIdRef = useRef(myId);
@@ -220,6 +226,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     const totalDistanceRef = useRef(0);
     const prevUserIdsRef = useRef<string[]>([]);
     const initialSyncDoneRef = useRef(false);
+    const wasConnectedRef = useRef(false);
 
     useEffect(() => { myNameRef.current = myName; }, [myName]);
     useEffect(() => { myColorRef.current = myColor; }, [myColor]);
@@ -317,19 +324,40 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         lastSeen: Date.now(),
     });
 
+    const upsertMember = (member: ConvoyMember) => {
+        setUsers(prev => {
+            const idx = prev.findIndex(u => u.id === member.id);
+            if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = member;
+                return next;
+            }
+            return [...prev, member];
+        });
+    };
+
     // Connect to Supabase when convoyId is set
     useEffect(() => {
-        if (!convoyId || !myId) return;
-        if (channelRef.current) supabase.removeChannel(channelRef.current);
+        if (loading) return; // Wait for Auth loading to complete (anonymous guest sign-in)
+        if (!convoyId || !myId) {
+            setRealtimeStatus('idle');
+            return;
+        }
 
         // Reset join-detection state for this convoy session
         prevUserIdsRef.current = [];
         initialSyncDoneRef.current = false;
+        setTripStartTime(Date.now());
+        totalDistanceRef.current = 0;
+        setTotalDistanceKm(0);
+
+        setRealtimeStatus('connecting');
 
         const channel = supabase.channel(`convoy:${convoyId}`, {
             config: {
-                broadcast: { ack: true, self: true },
-                presence: { key: myId },
+                presence: {
+                    key: myId,
+                },
             },
         })
             .on('presence', { event: 'sync' }, () => {
@@ -360,6 +388,17 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
             })
             .on('broadcast', { event: 'chat' }, ({ payload }: { payload: Message }) => {
                 setMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
+            })
+            .on('broadcast', { event: 'member_join' }, ({ payload }: { payload: ConvoyMember }) => {
+                if (!payload?.id) return;
+                upsertMember(payload);
+                if (payload.id !== myIdRef.current) {
+                    channel.send({ type: 'broadcast', event: 'member_snapshot', payload: buildPresencePayload() });
+                }
+            })
+            .on('broadcast', { event: 'member_snapshot' }, ({ payload }: { payload: ConvoyMember }) => {
+                if (!payload?.id) return;
+                upsertMember(payload);
             })
             .on('broadcast', { event: 'vote_new' }, ({ payload }: { payload: Vote }) => {
                 setVotes(prev => prev.some(v => v.id === payload.id) ? prev : [payload, ...prev]);
@@ -401,19 +440,49 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
                     pushTokensRef.current[payload.userId] = payload.token;
                 }
             })
-            .subscribe(async (status) => {
-                if (status !== 'SUBSCRIBED') return;
-                await channel.track(buildPresencePayload());
-                // Share push token with convoy
-                if (myPushTokenRef.current) {
-                    channel.send({ type: 'broadcast', event: 'push_token', payload: { userId: myIdRef.current, token: myPushTokenRef.current } });
+            .subscribe(async (status, err) => {
+                if (status === 'SUBSCRIBED') {
+                    // Cancel any pending disconnect notification — we're back
+                    if (disconnectTimerRef.current) {
+                        clearTimeout(disconnectTimerRef.current);
+                        disconnectTimerRef.current = null;
+                    }
+                    setRealtimeStatus('connected');
+                    wasConnectedRef.current = true;
+                    const payload = buildPresencePayload();
+                    upsertMember(payload);
+                    try {
+                        await channel.track(payload);
+                    } catch (trackErr) {
+                        console.error('[Convoy] Error tracking presence payload:', trackErr);
+                    }
+                    channel.send({ type: 'broadcast', event: 'member_join', payload });
+                    // Share push token with convoy
+                    if (myPushTokenRef.current) {
+                        channel.send({ type: 'broadcast', event: 'push_token', payload: { userId: myIdRef.current, token: myPushTokenRef.current } });
+                    }
+                    return;
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    console.warn('[Convoy] Realtime channel status:', status, err);
+                    // Grace period before showing disconnect — Supabase often reconnects within 2–4 s
+                    if (wasConnectedRef.current && !disconnectTimerRef.current) {
+                        setRealtimeStatus('connecting'); // Show as reconnecting, not OFFLINE
+                        disconnectTimerRef.current = setTimeout(() => {
+                            disconnectTimerRef.current = null;
+                            setRealtimeStatus('disconnected');
+                            showToast('Convoy connection lost', '⚠️', '#FF2D55');
+                            wasConnectedRef.current = false;
+                        }, 5000);
+                    }
+                }
+                // CLOSED is intentional (removeChannel called) — silently reset
+                if (status === 'CLOSED') {
+                    setRealtimeStatus('idle');
                 }
             });
 
         channelRef.current = channel;
-        setTripStartTime(Date.now());
-        totalDistanceRef.current = 0;
-        setTotalDistanceKm(0);
 
         // GPS tracking
         (async () => {
@@ -440,13 +509,12 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
                     isTalking: isTalkingRef.current,
                     lastSeen: Date.now(),
                 };
-                setUsers(prev => {
-                    const idx = prev.findIndex(u => u.id === myIdRef.current);
-                    if (idx >= 0) { const n = [...prev]; n[idx] = payload; return n; }
-                    return [...prev, payload];
-                });
+                upsertMember(payload);
                 try {
-                    if (channelRef.current) await channelRef.current.track(payload);
+                    if (channelRef.current) {
+                        await channelRef.current.track(payload);
+                        await channelRef.current.send({ type: 'broadcast', event: 'member_snapshot', payload });
+                    }
                 } catch (_) {}
             };
 
@@ -474,7 +542,9 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
                 // Re-track every 10 s so Supabase Presence stays current when stationary
                 const reTrackInterval = setInterval(() => {
                     if (lastPositionRef.current && channelRef.current) {
-                        channelRef.current.track(buildPresencePayload()).catch(() => {});
+                        const payload = buildPresencePayload();
+                        channelRef.current.track(payload).catch(() => {});
+                        channelRef.current.send({ type: 'broadcast', event: 'member_snapshot', payload }).catch(() => {});
                     }
                 }, 10000);
                 locationSubRef.current = {
@@ -509,10 +579,15 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         })();
 
         return () => {
+            setRealtimeStatus('idle');
+            if (disconnectTimerRef.current) {
+                clearTimeout(disconnectTimerRef.current);
+                disconnectTimerRef.current = null;
+            }
             if (channelRef.current) supabase.removeChannel(channelRef.current);
             if (locationSubRef.current?.remove) locationSubRef.current.remove();
         };
-    }, [convoyId, myId]);
+    }, [convoyId, myId, loading]);
 
     // ─── Identity ────────────────────────────────────────────────────────────
     const setIdentity = async (name: string, color: string) => {
@@ -581,6 +656,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         }
         if (channelRef.current) supabase.removeChannel(channelRef.current);
         if (locationSubRef.current?.remove) locationSubRef.current.remove();
+        setRealtimeStatus('idle');
         
         setConvoyId(null);
         setUsers([]); setMessages([]); setVotes([]); setLedger([]);
@@ -590,11 +666,25 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     };
 
     // ─── Chat ────────────────────────────────────────────────────────────────
-    const sendMessage = (content: string) => {
-        if (!convoyId || !channelRef.current) return;
+    const sendMessage = async (content: string) => {
+        if (!convoyId || !channelRef.current || realtimeStatus !== 'connected') {
+            showToast('Chat is not connected yet', '⚠️', '#FF2D55');
+            return false;
+        }
         const msg: Message = { id: genId(), userId: myId, userName: myName, content, createdAt: new Date().toISOString() };
-        setMessages(prev => [...prev, msg]);
-        channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
+        try {
+            const result = await channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
+            if (result !== 'ok') {
+                showToast('Message failed to send', '⚠️', '#FF2D55');
+                return false;
+            }
+            setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+            return true;
+        } catch (error) {
+            console.warn('[Convoy] Failed to send chat message', error);
+            showToast('Message failed to send', '⚠️', '#FF2D55');
+            return false;
+        }
     };
 
     // ─── Ledger ──────────────────────────────────────────────────────────────
@@ -685,7 +775,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         <ConvoyContext.Provider value={{
             isLoaded, convoyId, myId, myName, myColor, myRole, myStatus,
             users, messages, votes, ledger, hazardPins, sosAlerts,
-            whoIsTalking, isTalkingLocally, tripStartTime, totalDistanceKm,
+            whoIsTalking, isTalkingLocally, realtimeStatus, tripStartTime, totalDistanceKm,
             setIdentity, joinConvoy, leaveConvoy, endConvoy,
             sendMessage, addLedgerItem, proposeVote, castVote, setTalking,
             addHazardPin, sendSOS, dismissSOS, setMyStatus, claimRole,

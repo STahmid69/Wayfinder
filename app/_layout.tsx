@@ -14,16 +14,27 @@ function WebWrapper({ children }: { children: React.ReactNode }) {
         <View style={{
             flex: 1,
             backgroundColor: '#000',
-            height: '100vh' as any,
+            height: '100dvh' as any,
             // Using margin: '0 auto' for more stable centering of absolute children on web
         }}>
             <style dangerouslySetInnerHTML={{ __html: `
+                html, #root {
+                    background-color: #000;
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                    height: 100%;
+                    height: 100dvh;
+                    overflow: hidden;
+                }
+
                 body {
                     background-color: #000;
                     margin: 0;
                     padding: 0;
                     overflow: hidden;
-                    height: 100vh;
+                    height: 100%;
+                    height: 100dvh;
                     -webkit-user-select: none;
                     -moz-user-select: none;
                     -ms-user-select: none;

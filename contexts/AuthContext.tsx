@@ -15,13 +15,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setLoading(false);
+            if (!session) {
+                supabase.auth.signInAnonymously()
+                    .then(({ data: { session: newSession } }) => {
+                        setSession(newSession);
+                        setLoading(false);
+                    })
+                    .catch((err) => {
+                        console.warn('Anonymous sign-in failed (proceeding as guest):', err);
+                        setSession(null);
+                        setLoading(false);
+                    });
+            } else {
+                setSession(session);
+                setLoading(false);
+            }
         });
 
-        supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
         });
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     return <AuthContext.Provider value={{ session, loading }}>{children}</AuthContext.Provider>;
