@@ -468,17 +468,28 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
                     }
                     if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
                         console.warn('[Convoy] Realtime channel status:', status, err);
-                        if (wasConnectedRef.current && !disconnectTimerRef.current) {
+                        // Always retry — even if we never successfully connected yet
+                        if (!disconnectTimerRef.current) {
                             setRealtimeStatus('connecting');
                             disconnectTimerRef.current = setTimeout(() => {
                                 disconnectTimerRef.current = null;
                                 reconnectAttemptsRef.current++;
-                                if (reconnectAttemptsRef.current >= 3) {
-                                    // Exhausted retries — surface the error
+                                if (reconnectAttemptsRef.current >= 5) {
+                                    // Surface error after 5 attempts (~30 s of retrying)
                                     setRealtimeStatus('disconnected');
                                     showToast('Convoy connection lost', '⚠️', '#FF2D55');
                                     wasConnectedRef.current = false;
                                     reconnectAttemptsRef.current = 0;
+                                    // Remove stale channel so ghost SUBSCRIBED events don't restart the cycle
+                                    if (channelRef.current) {
+                                        supabase.removeChannel(channelRef.current);
+                                        channelRef.current = null;
+                                    }
+                                    // Auto-retry after 30 s in case it was a temporary outage
+                                    disconnectTimerRef.current = setTimeout(() => {
+                                        disconnectTimerRef.current = null;
+                                        createChannel();
+                                    }, 30000);
                                 } else {
                                     // Recreate the channel — Supabase didn't auto-recover
                                     createChannel();
