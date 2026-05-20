@@ -111,9 +111,9 @@ export default function VoiceEngine() {
             if (isTalkingLocally) {
                 // Resume AudioContext — must happen on every PTT press to
                 // counteract mobile browser auto-suspension.
+                // resumeAudioContext() is the correct SDK method; getAudioContext() doesn't exist.
                 try {
-                    const ctx = (agoraRef.current as any)?.getAudioContext?.();
-                    if (ctx?.state === 'suspended') await ctx.resume();
+                    agoraRef.current?.resumeAudioContext?.();
                 } catch (_) {}
 
                 // Re-play remote tracks in case they stopped after suspension.

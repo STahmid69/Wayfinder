@@ -438,6 +438,16 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
                 .on('broadcast', { event: 'sos_dismiss' }, ({ payload }: { payload: { sosId: string } }) => {
                     setSOSAlerts(prev => prev.filter(a => a.id !== payload.sosId));
                 })
+                .on('broadcast', { event: 'vote_snapshot' }, ({ payload }: { payload: Vote[] }) => {
+                    setVotes(prev => {
+                        const merged = [...payload, ...prev];
+                        const unique: Vote[] = [];
+                        merged.forEach(v => {
+                            if (!unique.some(u => u.id === v.id)) unique.push(v);
+                        });
+                        return unique;
+                    });
+                })
                 .on('broadcast', { event: 'push_token' }, ({ payload }: { payload: { userId: string; token: string } }) => {
                     if (payload.userId !== myIdRef.current) {
                         pushTokensRef.current[payload.userId] = payload.token;
@@ -460,6 +470,9 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
                             console.error('[Convoy] Error tracking presence payload:', trackErr);
                         }
                         ch.send({ type: 'broadcast', event: 'member_join', payload });
+                        if (votes.length) {
+                            ch.send({ type: 'broadcast', event: 'vote_snapshot', payload: votes });
+                        }
                         if (myPushTokenRef.current) {
                             ch.send({ type: 'broadcast', event: 'push_token', payload: { userId: myIdRef.current, token: myPushTokenRef.current } });
                         }
