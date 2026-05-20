@@ -128,7 +128,7 @@ function PulseRing({ active, delay = 0, size = 220 }: { active: boolean; delay?:
 }
 
 export default function PttScreen() {
-  const { users, myId, convoyId, whoIsTalking, setTalking, myStatus, setMyStatus } = useConvoy();
+  const { users, myId, convoyId, whoIsTalking, setTalking, myStatus, setMyStatus, voiceStatus } = useConvoy();
   const insets = useSafeAreaInsets();
   const [isTalking, setIsTalking] = useState(false);
   const [isLatchMode, setIsLatchMode] = useState(false);
@@ -190,9 +190,17 @@ export default function PttScreen() {
               COMM · CH 01
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: WF.green }} />
-              <Text style={{ fontSize: 10, color: WF.green, letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: '700' }}>
-                LINK · {users.length > 0 ? 'STRONG' : 'SEARCHING'}
+              <View style={{
+                width: 6, height: 6, borderRadius: 3,
+                backgroundColor: voiceStatus === 'connected' ? WF.green : voiceStatus === 'error' ? WF.red : WF.yellow,
+              }} />
+              <Text style={{
+                fontSize: 10,
+                color: voiceStatus === 'connected' ? WF.green : voiceStatus === 'error' ? WF.red : WF.yellow,
+                letterSpacing: 1.5, textTransform: 'uppercase', fontWeight: '700',
+              }}>
+                {voiceStatus === 'connected' ? `VOICE · ${users.length > 0 ? 'STRONG' : 'ONLINE'}` :
+                 voiceStatus === 'error' ? 'VOICE · ERROR' : 'VOICE · INIT'}
               </Text>
             </View>
           </View>

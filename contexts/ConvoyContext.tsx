@@ -106,6 +106,8 @@ type ConvoyContextType = {
     sosAlerts: SOSAlert[];
     whoIsTalking: string | null;
     isTalkingLocally: boolean;
+    voiceStatus: 'connecting' | 'connected' | 'error';
+    setVoiceStatus: (s: 'connecting' | 'connected' | 'error') => void;
     realtimeStatus: RealtimeStatus;
     tripStartTime: number | null;
     totalDistanceKm: number;
@@ -207,6 +209,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     const [sosAlerts, setSOSAlerts] = useState<SOSAlert[]>([]);
     const [whoIsTalking, setWhoIsTalking] = useState<string | null>(null);
     const [isTalkingLocally, setIsTalkingLocally] = useState(false);
+    const [voiceStatus, setVoiceStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
     const [realtimeStatus, setRealtimeStatus] = useState<RealtimeStatus>('idle');
     const [tripStartTime, setTripStartTime] = useState<number | null>(null);
     const [totalDistanceKm, setTotalDistanceKm] = useState(0);
@@ -807,7 +810,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         <ConvoyContext.Provider value={{
             isLoaded, convoyId, myId, myName, myColor, myRole, myStatus,
             users, messages, votes, ledger, hazardPins, sosAlerts,
-            whoIsTalking, isTalkingLocally, realtimeStatus, tripStartTime, totalDistanceKm,
+            whoIsTalking, isTalkingLocally, voiceStatus, setVoiceStatus, realtimeStatus, tripStartTime, totalDistanceKm,
             setIdentity, joinConvoy, leaveConvoy, endConvoy,
             sendMessage, addLedgerItem, proposeVote, castVote, setTalking,
             addHazardPin, sendSOS, dismissSOS, setMyStatus, claimRole,

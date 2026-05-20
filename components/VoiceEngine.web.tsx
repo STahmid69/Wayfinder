@@ -4,7 +4,7 @@ import { useConvoy } from '../contexts/ConvoyContext';
 const APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || '';
 
 export default function VoiceEngine() {
-    const { convoyId, myId, isTalkingLocally } = useConvoy();
+    const { convoyId, myId, isTalkingLocally, setVoiceStatus } = useConvoy();
     const clientRef = useRef<any>(null);
     const localAudioTrackRef = useRef<any>(null);
     const agoraRef = useRef<any>(null);
@@ -15,8 +15,10 @@ export default function VoiceEngine() {
         if (!convoyId || !myId) return;
         if (!APP_ID) {
             console.error('[VoiceEngine] EXPO_PUBLIC_AGORA_APP_ID is not set — voice will not work');
+            setVoiceStatus('error');
             return;
         }
+        setVoiceStatus('connecting');
 
         let audioObserver: MutationObserver | null = null;
 
@@ -59,6 +61,7 @@ export default function VoiceEngine() {
 
                 await client.join(APP_ID, convoyId, null, null);
                 joinedRef.current = true;
+                setVoiceStatus('connected');
                 console.log('[VoiceEngine] Joined channel:', convoyId);
 
                 // If microphone permission is already granted, create the track now
@@ -72,6 +75,7 @@ export default function VoiceEngine() {
 
             } catch (err) {
                 console.error('[VoiceEngine] Init error:', err);
+                setVoiceStatus('error');
             }
         };
 

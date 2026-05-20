@@ -33,4 +33,12 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         persistSession: true,
         detectSessionInUrl: false,
     },
+    // Force Realtime to use the anon key as its JWT rather than the session
+    // access token. The session JWT loaded from localStorage on startup may be
+    // stale/expired, causing CHANNEL_ERROR before the auth refresh completes.
+    // The anon key is a valid long-lived JWT (exp 2036) and is sufficient for
+    // all public Presence + Broadcast channels the app uses.
+    realtime: {
+        accessToken: async () => supabaseAnonKey,
+    },
 });
