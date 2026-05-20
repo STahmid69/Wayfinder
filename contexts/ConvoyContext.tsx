@@ -227,6 +227,7 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     const prevUserIdsRef = useRef<string[]>([]);
     const initialSyncDoneRef = useRef(false);
     const wasConnectedRef = useRef(false);
+    const reconnectAttemptsRef = useRef(0);
 
     useEffect(() => { myNameRef.current = myName; }, [myName]);
     useEffect(() => { myColorRef.current = myColor; }, [myColor]);
@@ -352,137 +353,145 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         setTotalDistanceKm(0);
 
         setRealtimeStatus('connecting');
+        reconnectAttemptsRef.current = 0;
 
-        const channel = supabase.channel(`convoy:${convoyId}`, {
-            config: {
-                presence: {
-                    key: myId,
-                },
-            },
-        })
-            .on('presence', { event: 'sync' }, () => {
-                const state = channel.presenceState();
-                // Deduplicate by user ID — multiple tabs/reconnects can create duplicate entries
-                const membersMap = new Map<string, ConvoyMember>();
-                Object.values(state).forEach((presences: any) => {
-                    presences.forEach((p: any) => {
-                        if (p.id) membersMap.set(p.id, p as ConvoyMember);
+        // createChannel is defined as a const so the subscribe callback can call it
+        // recursively for reconnection without re-running the whole effect (GPS stays alive).
+        const createChannel = () => {
+            if (channelRef.current) {
+                supabase.removeChannel(channelRef.current);
+                channelRef.current = null;
+            }
+            setRealtimeStatus('connecting');
+
+            const ch = supabase.channel(`convoy:${convoyId}`, {
+                config: { presence: { key: myId } },
+            })
+                .on('presence', { event: 'sync' }, () => {
+                    const state = ch.presenceState();
+                    const membersMap = new Map<string, ConvoyMember>();
+                    Object.values(state).forEach((presences: any) => {
+                        presences.forEach((p: any) => {
+                            if (p.id) membersMap.set(p.id, p as ConvoyMember);
+                        });
                     });
-                });
-                const newMembers = Array.from(membersMap.values());
+                    const newMembers = Array.from(membersMap.values());
 
-                // Detect new joins after the initial sync (skip first sync to avoid toasting existing members)
-                if (initialSyncDoneRef.current) {
-                    const prevIds = prevUserIdsRef.current;
-                    newMembers.forEach(member => {
-                        if (member.id !== myIdRef.current && !prevIds.includes(member.id)) {
-                            showToast(`${member.name} joined the convoy`, '🚗', '#FF6A00');
-                        }
-                    });
-                } else {
-                    initialSyncDoneRef.current = true;
-                }
-                prevUserIdsRef.current = newMembers.map(m => m.id);
-
-                setUsers(newMembers);
-            })
-            .on('broadcast', { event: 'chat' }, ({ payload }: { payload: Message }) => {
-                setMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
-            })
-            .on('broadcast', { event: 'member_join' }, ({ payload }: { payload: ConvoyMember }) => {
-                if (!payload?.id) return;
-                upsertMember(payload);
-                if (payload.id !== myIdRef.current) {
-                    channel.send({ type: 'broadcast', event: 'member_snapshot', payload: buildPresencePayload() });
-                }
-            })
-            .on('broadcast', { event: 'member_snapshot' }, ({ payload }: { payload: ConvoyMember }) => {
-                if (!payload?.id) return;
-                upsertMember(payload);
-            })
-            .on('broadcast', { event: 'vote_new' }, ({ payload }: { payload: Vote }) => {
-                setVotes(prev => prev.some(v => v.id === payload.id) ? prev : [payload, ...prev]);
-            })
-            .on('broadcast', { event: 'vote_cast' }, ({ payload }: { payload: { voteId: string; optionId: string; userId: string } }) => {
-                setVotes(prev => prev.map(v => {
-                    if (v.id !== payload.voteId) return v;
-                    return {
-                        ...v,
-                        options: v.options.map(o => {
-                            const without = o.voterIds.filter(uid => uid !== payload.userId);
-                            return o.id === payload.optionId ? { ...o, voterIds: [...without, payload.userId] } : { ...o, voterIds: without };
-                        }),
-                    };
-                }));
-            })
-            .on('broadcast', { event: 'ledger' }, ({ payload }: { payload: LedgerItem }) => {
-                setLedger(prev => prev.some(i => i.id === payload.id) ? prev : [payload, ...prev]);
-            })
-            .on('broadcast', { event: 'ptt' }, ({ payload }: { payload: { userId: string; userName?: string; isTalking: boolean } }) => {
-                if (payload.isTalking && payload.userId !== myIdRef.current) {
-                    showToast(`${payload.userName ?? 'Someone'} is transmitting`, '🎙', '#FF6A00');
-                }
-                setWhoIsTalking(payload.isTalking ? payload.userId : null);
-            })
-            .on('broadcast', { event: 'hazard' }, ({ payload }: { payload: HazardPin }) => {
-                showToast(`Hazard reported by ${payload.addedByName}`, '⚠️', '#FFC400');
-                setHazardPins(prev => prev.some(p => p.id === payload.id) ? prev : [...prev, payload]);
-            })
-            .on('broadcast', { event: 'sos' }, ({ payload }: { payload: SOSAlert }) => {
-                showToast(`${payload.userName} sent an SOS!`, '🚨', '#FF2D55');
-                setSOSAlerts(prev => prev.some(a => a.id === payload.id) ? prev : [...prev, payload]);
-            })
-            .on('broadcast', { event: 'sos_dismiss' }, ({ payload }: { payload: { sosId: string } }) => {
-                setSOSAlerts(prev => prev.filter(a => a.id !== payload.sosId));
-            })
-            .on('broadcast', { event: 'push_token' }, ({ payload }: { payload: { userId: string; token: string } }) => {
-                if (payload.userId !== myIdRef.current) {
-                    pushTokensRef.current[payload.userId] = payload.token;
-                }
-            })
-            .subscribe(async (status, err) => {
-                if (status === 'SUBSCRIBED') {
-                    // Cancel any pending disconnect notification — we're back
-                    if (disconnectTimerRef.current) {
-                        clearTimeout(disconnectTimerRef.current);
-                        disconnectTimerRef.current = null;
+                    if (initialSyncDoneRef.current) {
+                        const prevIds = prevUserIdsRef.current;
+                        newMembers.forEach(member => {
+                            if (member.id !== myIdRef.current && !prevIds.includes(member.id)) {
+                                showToast(`${member.name} joined the convoy`, '🚗', '#FF6A00');
+                            }
+                        });
+                    } else {
+                        initialSyncDoneRef.current = true;
                     }
-                    setRealtimeStatus('connected');
-                    wasConnectedRef.current = true;
-                    const payload = buildPresencePayload();
+                    prevUserIdsRef.current = newMembers.map(m => m.id);
+                    setUsers(newMembers);
+                })
+                .on('broadcast', { event: 'chat' }, ({ payload }: { payload: Message }) => {
+                    setMessages(prev => prev.some(m => m.id === payload.id) ? prev : [...prev, payload]);
+                })
+                .on('broadcast', { event: 'member_join' }, ({ payload }: { payload: ConvoyMember }) => {
+                    if (!payload?.id) return;
                     upsertMember(payload);
-                    try {
-                        await channel.track(payload);
-                    } catch (trackErr) {
-                        console.error('[Convoy] Error tracking presence payload:', trackErr);
+                    if (payload.id !== myIdRef.current) {
+                        ch.send({ type: 'broadcast', event: 'member_snapshot', payload: buildPresencePayload() });
                     }
-                    channel.send({ type: 'broadcast', event: 'member_join', payload });
-                    // Share push token with convoy
-                    if (myPushTokenRef.current) {
-                        channel.send({ type: 'broadcast', event: 'push_token', payload: { userId: myIdRef.current, token: myPushTokenRef.current } });
+                })
+                .on('broadcast', { event: 'member_snapshot' }, ({ payload }: { payload: ConvoyMember }) => {
+                    if (!payload?.id) return;
+                    upsertMember(payload);
+                })
+                .on('broadcast', { event: 'vote_new' }, ({ payload }: { payload: Vote }) => {
+                    setVotes(prev => prev.some(v => v.id === payload.id) ? prev : [payload, ...prev]);
+                })
+                .on('broadcast', { event: 'vote_cast' }, ({ payload }: { payload: { voteId: string; optionId: string; userId: string } }) => {
+                    setVotes(prev => prev.map(v => {
+                        if (v.id !== payload.voteId) return v;
+                        return {
+                            ...v,
+                            options: v.options.map(o => {
+                                const without = o.voterIds.filter(uid => uid !== payload.userId);
+                                return o.id === payload.optionId ? { ...o, voterIds: [...without, payload.userId] } : { ...o, voterIds: without };
+                            }),
+                        };
+                    }));
+                })
+                .on('broadcast', { event: 'ledger' }, ({ payload }: { payload: LedgerItem }) => {
+                    setLedger(prev => prev.some(i => i.id === payload.id) ? prev : [payload, ...prev]);
+                })
+                .on('broadcast', { event: 'ptt' }, ({ payload }: { payload: { userId: string; userName?: string; isTalking: boolean } }) => {
+                    if (payload.isTalking && payload.userId !== myIdRef.current) {
+                        showToast(`${payload.userName ?? 'Someone'} is transmitting`, '🎙', '#FF6A00');
                     }
-                    return;
-                }
-                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                    console.warn('[Convoy] Realtime channel status:', status, err);
-                    // Grace period before showing disconnect — Supabase often reconnects within 2–4 s
-                    if (wasConnectedRef.current && !disconnectTimerRef.current) {
-                        setRealtimeStatus('connecting'); // Show as reconnecting, not OFFLINE
-                        disconnectTimerRef.current = setTimeout(() => {
+                    setWhoIsTalking(payload.isTalking ? payload.userId : null);
+                })
+                .on('broadcast', { event: 'hazard' }, ({ payload }: { payload: HazardPin }) => {
+                    showToast(`Hazard reported by ${payload.addedByName}`, '⚠️', '#FFC400');
+                    setHazardPins(prev => prev.some(p => p.id === payload.id) ? prev : [...prev, payload]);
+                })
+                .on('broadcast', { event: 'sos' }, ({ payload }: { payload: SOSAlert }) => {
+                    showToast(`${payload.userName} sent an SOS!`, '🚨', '#FF2D55');
+                    setSOSAlerts(prev => prev.some(a => a.id === payload.id) ? prev : [...prev, payload]);
+                })
+                .on('broadcast', { event: 'sos_dismiss' }, ({ payload }: { payload: { sosId: string } }) => {
+                    setSOSAlerts(prev => prev.filter(a => a.id !== payload.sosId));
+                })
+                .on('broadcast', { event: 'push_token' }, ({ payload }: { payload: { userId: string; token: string } }) => {
+                    if (payload.userId !== myIdRef.current) {
+                        pushTokensRef.current[payload.userId] = payload.token;
+                    }
+                })
+                .subscribe(async (status, err) => {
+                    if (status === 'SUBSCRIBED') {
+                        if (disconnectTimerRef.current) {
+                            clearTimeout(disconnectTimerRef.current);
                             disconnectTimerRef.current = null;
-                            setRealtimeStatus('disconnected');
-                            showToast('Convoy connection lost', '⚠️', '#FF2D55');
-                            wasConnectedRef.current = false;
-                        }, 5000);
+                        }
+                        reconnectAttemptsRef.current = 0;
+                        setRealtimeStatus('connected');
+                        wasConnectedRef.current = true;
+                        const payload = buildPresencePayload();
+                        upsertMember(payload);
+                        try {
+                            await ch.track(payload);
+                        } catch (trackErr) {
+                            console.error('[Convoy] Error tracking presence payload:', trackErr);
+                        }
+                        ch.send({ type: 'broadcast', event: 'member_join', payload });
+                        if (myPushTokenRef.current) {
+                            ch.send({ type: 'broadcast', event: 'push_token', payload: { userId: myIdRef.current, token: myPushTokenRef.current } });
+                        }
+                        return;
                     }
-                }
-                // CLOSED is intentional (removeChannel called) — silently reset
-                if (status === 'CLOSED') {
-                    setRealtimeStatus('idle');
-                }
-            });
+                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                        console.warn('[Convoy] Realtime channel status:', status, err);
+                        if (wasConnectedRef.current && !disconnectTimerRef.current) {
+                            setRealtimeStatus('connecting');
+                            disconnectTimerRef.current = setTimeout(() => {
+                                disconnectTimerRef.current = null;
+                                reconnectAttemptsRef.current++;
+                                if (reconnectAttemptsRef.current >= 3) {
+                                    // Exhausted retries — surface the error
+                                    setRealtimeStatus('disconnected');
+                                    showToast('Convoy connection lost', '⚠️', '#FF2D55');
+                                    wasConnectedRef.current = false;
+                                    reconnectAttemptsRef.current = 0;
+                                } else {
+                                    // Recreate the channel — Supabase didn't auto-recover
+                                    createChannel();
+                                }
+                            }, 6000);
+                        }
+                    }
+                });
 
-        channelRef.current = channel;
+            channelRef.current = ch;
+        };
+
+        createChannel();
 
         // GPS tracking
         (async () => {
