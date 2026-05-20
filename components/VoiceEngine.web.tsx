@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { showToast } from './Toast';
 import { useConvoy } from '../contexts/ConvoyContext';
 
 const APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || '';
@@ -64,14 +65,9 @@ export default function VoiceEngine() {
                 setVoiceStatus('connected');
                 console.log('[VoiceEngine] Joined channel:', convoyId);
 
-                // If microphone permission is already granted, create the track now
-                // so there's no delay on the first PTT press.
-                try {
-                    const perm = await navigator.permissions?.query({ name: 'microphone' as PermissionName });
-                    if (perm?.state === 'granted') {
-                        await createMicTrack();
-                    }
-                } catch (_) {}
+                // Request mic access immediately so the browser permission prompt
+                // appears on join rather than silently failing on first PTT press.
+                await createMicTrack();
 
             } catch (err) {
                 console.error('[VoiceEngine] Init error:', err);
@@ -103,8 +99,16 @@ export default function VoiceEngine() {
             localAudioTrackRef.current = track;
             await clientRef.current.publish([track]);
             console.log('[VoiceEngine] Mic track ready');
-        } catch (err) {
+        } catch (err: any) {
             console.error('[VoiceEngine] Mic create error:', err);
+            const msg = (err?.message ?? err?.toString() ?? '').toLowerCase();
+            if (msg.includes('permission') || msg.includes('not_allowed') || msg.includes('notallowed') || msg.includes('denied')) {
+                showToast('Mic blocked — click the 🔒 in your browser bar and allow Microphone', '🎤', '#FF2D55');
+            } else if (msg.includes('not found') || msg.includes('notfound') || msg.includes('no device')) {
+                showToast('No microphone found — plug one in and rejoin', '🎤', '#FF6A00');
+            } else {
+                showToast('Mic error — check browser permissions and try again', '🎤', '#FF6A00');
+            }
         }
     };
 
