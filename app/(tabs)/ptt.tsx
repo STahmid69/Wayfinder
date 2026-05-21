@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, ScrollView, Share, Text, TouchableOpacity, Vibration, View, Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DRIVER_STATUS_LABELS, DriverStatus, useConvoy } from '../../contexts/ConvoyContext';
+import { acquireMicInGesture } from '../../lib/micAcquire';
 import tw from '../../lib/tailwind';
 
 const WF = {
@@ -149,22 +150,11 @@ export default function PttScreen() {
   const handlePressIn = () => {
     if (isLatchMode) return;
     if (Platform.OS !== 'web') Vibration.vibrate(50);
-    // Safari blocks AudioContext creation/resume outside user gestures.
-    // Creating and resuming one here (synchronously in the pointer-down handler)
-    // marks this page as "audio allowed", so Agora's internal AudioContext
-    // created milliseconds later in the React useEffect can start in running state.
-    if (Platform.OS === 'web') {
-      try {
-        const Ctx = (window.AudioContext ?? (window as any).webkitAudioContext) as typeof AudioContext | undefined;
-        if (Ctx && !(window as any).__wf_audio_ctx) {
-          const ctx = new Ctx();
-          ctx.resume();
-          (window as any).__wf_audio_ctx = ctx; // keep ref alive; prevents GC
-        } else {
-          (window as any).__wf_audio_ctx?.resume();
-        }
-      } catch (_) {}
-    }
+    // Call getUserMedia directly in the pointer-down handler (true user gesture).
+    // iOS Safari requires this — getUserMedia called from a useEffect async chain
+    // may fall outside Safari's strict gesture activation window.
+    // The acquired stream is picked up by VoiceEngine's createCustomAudioTrack.
+    if (Platform.OS === 'web') acquireMicInGesture();
     setIsTalking(true);
     setTalking(true);
   };

@@ -42,7 +42,8 @@ export default function VoiceEngine() {
                 });
                 audioObserver.observe(document.body, { childList: true, subtree: true });
 
-                const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+                // h264 is required for iOS Safari — vp8 is not supported there
+                const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'h264' });
                 clientRef.current = client;
 
                 client.on('user-published', async (user: any, mediaType: any) => {
@@ -82,35 +83,55 @@ export default function VoiceEngine() {
             clientRef.current?.leave();
             clientRef.current = null;
             remoteUsersRef.current.clear();
+            delete (window as any).__wf_mic_stream;
         };
     }, [convoyId, myId]);
 
     const createMicTrack = async () => {
         if (localAudioTrackRef.current || !clientRef.current || !agoraRef.current) return;
         try {
-            const track = await agoraRef.current.createMicrophoneAudioTrack({
-                encoderConfig: 'music_standard',
-                bypassWebAudio: true, // skip AudioContext on Safari — avoids suspended-context errors
-            });
+            let track: any;
+
+            // Prefer the stream pre-acquired in the PTT press handler (user gesture context).
+            // This is critical on iOS Safari where getUserMedia must be in a gesture.
+            const preStream = (window as any).__wf_mic_stream as MediaStream | undefined;
+            if (preStream) {
+                const audioTrack = preStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    track = await agoraRef.current.createCustomAudioTrack({
+                        mediaStreamTrack: audioTrack,
+                        encoderConfig: 'music_standard',
+                    });
+                    console.log('[VoiceEngine] Using pre-acquired stream (createCustomAudioTrack)');
+                }
+                // Don't delete the stream — track owns the underlying track object
+            }
+
+            // Fallback: let Agora call getUserMedia itself
+            if (!track) {
+                track = await agoraRef.current.createMicrophoneAudioTrack({
+                    encoderConfig: 'music_standard',
+                });
+                console.log('[VoiceEngine] Using createMicrophoneAudioTrack (fallback)');
+            }
+
             await track.setEnabled(false);
             localAudioTrackRef.current = track;
             await clientRef.current.publish([track]);
-            console.log('[VoiceEngine] Mic track ready');
+            console.log('[VoiceEngine] Mic track published');
         } catch (err: any) {
             console.error('[VoiceEngine] Mic create error:', err);
             const code = (err?.code ?? err?.name ?? '').toLowerCase();
             const msg = (err?.message ?? err?.toString() ?? '').toLowerCase();
             const full = code + ' ' + msg;
             if (full.includes('not_allowed') || full.includes('notallowed') || full.includes('permission') || full.includes('denied')) {
-                showToast('Mic blocked — click the 🔒 in your address bar and allow Microphone', '🎤', '#FF2D55');
+                showToast('Mic blocked — tap the 🔒 in your browser bar and allow Microphone', '🎤', '#FF2D55');
             } else if (full.includes('not found') || full.includes('notfound') || full.includes('no device') || full.includes('devicenotfound')) {
-                showToast('No microphone found — plug one in and rejoin', '🎤', '#FF6A00');
-            } else if (full.includes('not_supported') || full.includes('notsupported') || full.includes('audio context') || full.includes('not supported')) {
-                showToast('Mic blocked at OS level — go to System Settings → Privacy → Microphone and enable Chrome', '🎤', '#FF2D55');
+                showToast('No microphone found', '🎤', '#FF6A00');
             } else if (full.includes('not_readable') || full.includes('notreadable') || full.includes('in use')) {
-                showToast('Mic in use by another app — close other apps using the mic and rejoin', '🎤', '#FF6A00');
+                showToast('Mic in use by another app — close it and try again', '🎤', '#FF6A00');
             } else {
-                showToast(`Mic error [${err?.code ?? err?.name ?? 'unknown'}] — check browser permissions`, '🎤', '#FF6A00');
+                showToast(`Mic error [${err?.code ?? err?.name ?? 'unknown'}]`, '🎤', '#FF6A00');
             }
         }
     };
@@ -120,20 +141,11 @@ export default function VoiceEngine() {
             if (!joinedRef.current || !clientRef.current) return;
 
             if (isTalkingLocally) {
-                // Resume AudioContext — must happen on every PTT press to
-                // counteract mobile browser auto-suspension.
-                // resumeAudioContext() is the correct SDK method; getAudioContext() doesn't exist.
-                try {
-                    agoraRef.current?.resumeAudioContext?.();
-                } catch (_) {}
-
-                // Re-play remote tracks in case they stopped after suspension.
+                // Re-play remote tracks (handles Safari autoplay suspension on receive side)
                 remoteUsersRef.current.forEach((user) => {
                     try { user.audioTrack?.play(); } catch (_) {}
                 });
 
-                // First PTT press: create mic track here (= confirmed user gesture,
-                // so iOS Safari will show the permission prompt and honour AudioContext).
                 if (!localAudioTrackRef.current) {
                     await createMicTrack();
                 }
