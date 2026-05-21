@@ -65,10 +65,6 @@ export default function VoiceEngine() {
                 setVoiceStatus('connected');
                 console.log('[VoiceEngine] Joined channel:', convoyId);
 
-                // Request mic access immediately so the browser permission prompt
-                // appears on join rather than silently failing on first PTT press.
-                await createMicTrack();
-
             } catch (err) {
                 console.error('[VoiceEngine] Init error:', err);
                 setVoiceStatus('error');
@@ -101,13 +97,19 @@ export default function VoiceEngine() {
             console.log('[VoiceEngine] Mic track ready');
         } catch (err: any) {
             console.error('[VoiceEngine] Mic create error:', err);
+            const code = (err?.code ?? err?.name ?? '').toLowerCase();
             const msg = (err?.message ?? err?.toString() ?? '').toLowerCase();
-            if (msg.includes('permission') || msg.includes('not_allowed') || msg.includes('notallowed') || msg.includes('denied')) {
-                showToast('Mic blocked — click the 🔒 in your browser bar and allow Microphone', '🎤', '#FF2D55');
-            } else if (msg.includes('not found') || msg.includes('notfound') || msg.includes('no device')) {
+            const full = code + ' ' + msg;
+            if (full.includes('not_allowed') || full.includes('notallowed') || full.includes('permission') || full.includes('denied')) {
+                showToast('Mic blocked — click the 🔒 in your address bar and allow Microphone', '🎤', '#FF2D55');
+            } else if (full.includes('not found') || full.includes('notfound') || full.includes('no device') || full.includes('devicenotfound')) {
                 showToast('No microphone found — plug one in and rejoin', '🎤', '#FF6A00');
+            } else if (full.includes('not_supported') || full.includes('notsupported') || full.includes('audio context') || full.includes('not supported')) {
+                showToast('Mic blocked at OS level — go to System Settings → Privacy → Microphone and enable Chrome', '🎤', '#FF2D55');
+            } else if (full.includes('not_readable') || full.includes('notreadable') || full.includes('in use')) {
+                showToast('Mic in use by another app — close other apps using the mic and rejoin', '🎤', '#FF6A00');
             } else {
-                showToast('Mic error — check browser permissions and try again', '🎤', '#FF6A00');
+                showToast(`Mic error [${err?.code ?? err?.name ?? 'unknown'}] — check browser permissions`, '🎤', '#FF6A00');
             }
         }
     };
