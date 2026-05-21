@@ -149,6 +149,22 @@ export default function PttScreen() {
   const handlePressIn = () => {
     if (isLatchMode) return;
     if (Platform.OS !== 'web') Vibration.vibrate(50);
+    // Safari blocks AudioContext creation/resume outside user gestures.
+    // Creating and resuming one here (synchronously in the pointer-down handler)
+    // marks this page as "audio allowed", so Agora's internal AudioContext
+    // created milliseconds later in the React useEffect can start in running state.
+    if (Platform.OS === 'web') {
+      try {
+        const Ctx = (window.AudioContext ?? (window as any).webkitAudioContext) as typeof AudioContext | undefined;
+        if (Ctx && !(window as any).__wf_audio_ctx) {
+          const ctx = new Ctx();
+          ctx.resume();
+          (window as any).__wf_audio_ctx = ctx; // keep ref alive; prevents GC
+        } else {
+          (window as any).__wf_audio_ctx?.resume();
+        }
+      } catch (_) {}
+    }
     setIsTalking(true);
     setTalking(true);
   };

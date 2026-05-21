@@ -90,6 +90,7 @@ export default function VoiceEngine() {
         try {
             const track = await agoraRef.current.createMicrophoneAudioTrack({
                 encoderConfig: 'music_standard',
+                bypassWebAudio: true, // skip AudioContext on Safari — avoids suspended-context errors
             });
             await track.setEnabled(false);
             localAudioTrackRef.current = track;
