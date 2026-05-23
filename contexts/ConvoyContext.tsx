@@ -711,11 +711,16 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
         }
         // Use refs to avoid stale closure values (myId/myName may be empty string on first render)
         const msg: Message = { id: genId(), userId: myIdRef.current, userName: myNameRef.current || 'Driver', content, createdAt: new Date().toISOString() };
+        // Optimistically add message locally for instant feedback
+        // The broadcast handler deduplicates so the server echo won't double-add
+        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         try {
             await channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
             return true;
         } catch (error) {
             console.warn('[Convoy] Failed to send chat message', error);
+            // Remove the optimistic message if send failed
+            setMessages(prev => prev.filter(m => m.id !== msg.id));
             showToast('Message failed to send', '⚠️', '#FF2D55');
             return false;
         }
@@ -738,12 +743,25 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
             options: optionTexts.map(t => ({ id: genId(), text: t, voterIds: [] })),
             status: 'OPEN',
         };
+        // Optimistically add vote locally — handler deduplicates on echo
+        setVotes(prev => prev.some(v => v.id === vote.id) ? prev : [vote, ...prev]);
         channelRef.current.send({ type: 'broadcast', event: 'vote_new', payload: vote });
     };
 
     const castVote = (voteId: string, optionId: string) => {
         if (!convoyId || !channelRef.current) return;
         const userId = myIdRef.current;
+        // Optimistically update vote locally — the vote_cast handler is idempotent so echo is safe
+        setVotes(prev => prev.map(v => {
+            if (v.id !== voteId) return v;
+            return {
+                ...v,
+                options: v.options.map(o => {
+                    const without = o.voterIds.filter(uid => uid !== userId);
+                    return o.id === optionId ? { ...o, voterIds: [...without, userId] } : { ...o, voterIds: without };
+                }),
+            };
+        }));
         channelRef.current.send({ type: 'broadcast', event: 'vote_cast', payload: { voteId, optionId, userId } });
     };
 
