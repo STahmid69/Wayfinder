@@ -16,6 +16,7 @@ export default function VoiceEngine() {
         if (!convoyId || !myId) return;
         if (!APP_ID) {
             console.error('[VoiceEngine] EXPO_PUBLIC_AGORA_APP_ID is not set — voice will not work');
+            showToast('Voice Error: EXPO_PUBLIC_AGORA_APP_ID is missing', '🎤', '#FF2D55');
             setVoiceStatus('error');
             return;
         }
@@ -23,11 +24,25 @@ export default function VoiceEngine() {
 
         let audioObserver: MutationObserver | null = null;
 
+        const resumeAudio = () => {
+            remoteUsersRef.current.forEach((user) => {
+                if (user.audioTrack && !user.audioTrack.isPlaying) {
+                    console.log('[VoiceEngine] Resuming remote audio track for user:', user.uid);
+                    user.audioTrack.play().catch((e: any) => console.error('[VoiceEngine] Autoplay resume error:', e));
+                }
+            });
+        };
+
         const initAgora = async () => {
             try {
                 const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
                 agoraRef.current = AgoraRTC;
                 AgoraRTC.setLogLevel(3);
+
+                // Handle autoplay block events
+                AgoraRTC.onAutoplayFailed = () => {
+                    console.warn('[VoiceEngine] Autoplay blocked — user interaction required');
+                };
 
                 // Patch every <audio> Agora creates with playsinline so iOS Safari
                 // routes audio to the speaker instead of the earpiece.
@@ -66,15 +81,21 @@ export default function VoiceEngine() {
                 setVoiceStatus('connected');
                 console.log('[VoiceEngine] Joined channel:', convoyId);
 
-            } catch (err) {
+            } catch (err: any) {
                 console.error('[VoiceEngine] Init error:', err);
+                showToast(`Voice Init Error: ${err?.message || err?.toString()}`, '🎤', '#FF2D55');
                 setVoiceStatus('error');
             }
         };
 
         initAgora();
 
+        window.addEventListener('click', resumeAudio);
+        window.addEventListener('touchstart', resumeAudio);
+
         return () => {
+            window.removeEventListener('click', resumeAudio);
+            window.removeEventListener('touchstart', resumeAudio);
             audioObserver?.disconnect();
             joinedRef.current = false;
             localAudioTrackRef.current?.stop();
@@ -94,9 +115,22 @@ export default function VoiceEngine() {
 
             // Prefer the stream pre-acquired in the PTT press handler (user gesture context).
             // This is critical on iOS Safari where getUserMedia must be in a gesture.
-            const preStream = (window as any).__wf_mic_stream as MediaStream | undefined;
-            if (preStream) {
-                const audioTrack = preStream.getAudioTracks()[0];
+            const preStreamOrPromise = (window as any).__wf_mic_stream;
+            let stream: MediaStream | undefined;
+            if (preStreamOrPromise) {
+                if (preStreamOrPromise instanceof Promise) {
+                    try {
+                        stream = await preStreamOrPromise;
+                    } catch (e) {
+                        console.error('[VoiceEngine] Error awaiting pre-acquired stream:', e);
+                    }
+                } else {
+                    stream = preStreamOrPromise;
+                }
+            }
+
+            if (stream) {
+                const audioTrack = stream.getAudioTracks()[0];
                 if (audioTrack) {
                     track = await agoraRef.current.createCustomAudioTrack({
                         mediaStreamTrack: audioTrack,
@@ -104,7 +138,6 @@ export default function VoiceEngine() {
                     });
                     console.log('[VoiceEngine] Using pre-acquired stream (createCustomAudioTrack)');
                 }
-                // Don't delete the stream — track owns the underlying track object
             }
 
             // Fallback: let Agora call getUserMedia itself
@@ -115,12 +148,12 @@ export default function VoiceEngine() {
                 console.log('[VoiceEngine] Using createMicrophoneAudioTrack (fallback)');
             }
 
-            await track.setEnabled(false);
+            // Start muted, publish
+            await track.setMuted(true);
             localAudioTrackRef.current = track;
             await clientRef.current.publish([track]);
             console.log('[VoiceEngine] Mic track published');
         } catch (err: any) {
-            console.error('[VoiceEngine] Mic create error:', err);
             const code = (err?.code ?? err?.name ?? '').toLowerCase();
             const msg = (err?.message ?? err?.toString() ?? '').toLowerCase();
             const full = code + ' ' + msg;
@@ -150,11 +183,11 @@ export default function VoiceEngine() {
                     await createMicTrack();
                 }
 
-                await localAudioTrackRef.current?.setEnabled(true);
-                console.log('[VoiceEngine] Mic ENABLED');
+                await localAudioTrackRef.current?.setMuted(false);
+                console.log('[VoiceEngine] Mic UNMUTED');
             } else {
-                await localAudioTrackRef.current?.setEnabled(false);
-                console.log('[VoiceEngine] Mic DISABLED');
+                await localAudioTrackRef.current?.setMuted(true);
+                console.log('[VoiceEngine] Mic MUTED');
             }
         };
 

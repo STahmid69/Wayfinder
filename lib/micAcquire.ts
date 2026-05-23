@@ -4,9 +4,15 @@
 // VoiceEngine.web reads window.__wf_mic_stream and uses createCustomAudioTrack.
 export function acquireMicInGesture(): void {
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
-    navigator.mediaDevices.getUserMedia({ audio: true })
-        .then(stream => {
-            if (typeof window !== 'undefined') (window as any).__wf_mic_stream = stream;
-        })
-        .catch(() => { /* VoiceEngine will surface permission errors on first PTT */ });
+
+    // If we already have an active stream, don't request a new one!
+    const existing = (window as any).__wf_mic_stream;
+    if (existing) {
+        if (existing instanceof Promise) return; // already loading
+        if (existing.active && existing.getAudioTracks().some((t: any) => t.readyState === 'live')) {
+            return;
+        }
+    }
+
+    (window as any).__wf_mic_stream = navigator.mediaDevices.getUserMedia({ audio: true });
 }
