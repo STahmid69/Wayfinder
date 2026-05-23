@@ -1,199 +1,319 @@
+/**
+ * VoiceEngine.web.tsx — Native WebRTC voice engine for web
+ *
+ * Replaces the Agora SDK entirely. Uses browser RTCPeerConnection for audio and
+ * a dedicated Supabase Realtime broadcast channel (`rtc:<convoyId>`) for
+ * offer/answer/ICE signaling. No App ID or external service required.
+ *
+ * Architecture (mesh):
+ *   - On join, broadcast a 'join' event so all existing peers create offers.
+ *   - Each peer handles offer → answer → ICE via Supabase broadcast.
+ *   - Audio tracks start muted; enabled/disabled in response to PTT state.
+ */
+
 import { useEffect, useRef } from 'react';
 import { showToast } from './Toast';
 import { useConvoy } from '../contexts/ConvoyContext';
+import { supabase } from '../lib/supabase';
 
-const APP_ID = (process.env.EXPO_PUBLIC_AGORA_APP_ID === 'ca8b08e726184eee94b373cd632fd647' || !process.env.EXPO_PUBLIC_AGORA_APP_ID)
-    ? '9c7b5f9b2e8c4677a15b0a18d5d2a722'
-    : process.env.EXPO_PUBLIC_AGORA_APP_ID;
+const ICE_SERVERS = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+];
 
 export default function VoiceEngine() {
     const { convoyId, myId, isTalkingLocally, setVoiceStatus } = useConvoy();
-    const clientRef = useRef<any>(null);
-    const localAudioTrackRef = useRef<any>(null);
-    const agoraRef = useRef<any>(null);
-    const joinedRef = useRef(false);
-    const remoteUsersRef = useRef<Map<any, any>>(new Map());
 
-    useEffect(() => {
-        if (!convoyId || !myId) return;
-        if (!APP_ID) {
-            console.error('[VoiceEngine] EXPO_PUBLIC_AGORA_APP_ID is not set — voice will not work');
-            showToast('Voice Error: EXPO_PUBLIC_AGORA_APP_ID is missing', '🎤', '#FF2D55');
-            setVoiceStatus('error');
-            return;
-        }
-        setVoiceStatus('connecting');
+    const localStreamRef = useRef<MediaStream | null>(null);
+    const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map());
+    const audioElemsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+    const sigChannelRef = useRef<any>(null);
+    const myIdRef = useRef(myId);
 
-        let audioObserver: MutationObserver | null = null;
+    useEffect(() => { myIdRef.current = myId; }, [myId]);
 
-        const resumeAudio = () => {
-            remoteUsersRef.current.forEach((user) => {
-                if (user.audioTrack && !user.audioTrack.isPlaying) {
-                    console.log('[VoiceEngine] Resuming remote audio track for user:', user.uid);
-                    user.audioTrack.play().catch((e: any) => console.error('[VoiceEngine] Autoplay resume error:', e));
-                }
-            });
-        };
-
-        const initAgora = async () => {
-            try {
-                const AgoraRTC = (await import('agora-rtc-sdk-ng')).default;
-                agoraRef.current = AgoraRTC;
-                AgoraRTC.setLogLevel(3);
-
-                // Handle autoplay block events
-                AgoraRTC.onAutoplayFailed = () => {
-                    console.warn('[VoiceEngine] Autoplay blocked — user interaction required');
-                };
-
-                // Patch every <audio> Agora creates with playsinline so iOS Safari
-                // routes audio to the speaker instead of the earpiece.
-                audioObserver = new MutationObserver((mutations) => {
-                    mutations.forEach(m => m.addedNodes.forEach(node => {
-                        const el = node as HTMLElement;
-                        if (el.tagName === 'AUDIO') {
-                            el.setAttribute('playsinline', '');
-                            el.setAttribute('webkit-playsinline', '');
-                        }
-                    }));
-                });
-                audioObserver.observe(document.body, { childList: true, subtree: true });
-
-                // h264 is required for iOS Safari — vp8 is not supported there
-                const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'h264' });
-                clientRef.current = client;
-
-                client.on('user-published', async (user: any, mediaType: any) => {
-                    await client.subscribe(user, mediaType);
-                    if (mediaType === 'audio') {
-                        remoteUsersRef.current.set(user.uid, user);
-                        user.audioTrack?.play();
-                    }
-                });
-
-                client.on('user-unpublished', (user: any, mediaType: any) => {
-                    if (mediaType === 'audio') {
-                        remoteUsersRef.current.delete(user.uid);
-                        user.audioTrack?.stop();
-                    }
-                });
-
-                await client.join(APP_ID, convoyId, null, null);
-                joinedRef.current = true;
-                setVoiceStatus('connected');
-                console.log('[VoiceEngine] Joined channel:', convoyId);
-
-            } catch (err: any) {
-                console.error('[VoiceEngine] Init error:', err);
-                showToast(`Voice Init Error: ${err?.message || err?.toString()}`, '🎤', '#FF2D55');
-                setVoiceStatus('error');
-            }
-        };
-
-        initAgora();
-
-        window.addEventListener('click', resumeAudio);
-        window.addEventListener('touchstart', resumeAudio);
-
-        return () => {
-            window.removeEventListener('click', resumeAudio);
-            window.removeEventListener('touchstart', resumeAudio);
-            audioObserver?.disconnect();
-            joinedRef.current = false;
-            localAudioTrackRef.current?.stop();
-            localAudioTrackRef.current?.close();
-            localAudioTrackRef.current = null;
-            clientRef.current?.leave();
-            clientRef.current = null;
-            remoteUsersRef.current.clear();
-            delete (window as any).__wf_mic_stream;
-        };
-    }, [convoyId, myId]);
-
-    const createMicTrack = async () => {
-        if (localAudioTrackRef.current || !clientRef.current || !agoraRef.current) return;
+    // ─── Mic acquisition ────────────────────────────────────────────────────
+    const ensureMic = async (): Promise<MediaStream | null> => {
+        if (localStreamRef.current?.active) return localStreamRef.current;
         try {
-            let track: any;
-
-            // Prefer the stream pre-acquired in the PTT press handler (user gesture context).
-            // This is critical on iOS Safari where getUserMedia must be in a gesture.
+            // Prefer the stream pre-acquired via PTT gesture handler (iOS Safari)
             const preStreamOrPromise = (window as any).__wf_mic_stream;
-            let stream: MediaStream | undefined;
             if (preStreamOrPromise) {
+                let stream: MediaStream | undefined;
                 if (preStreamOrPromise instanceof Promise) {
-                    try {
-                        stream = await preStreamOrPromise;
-                    } catch (e) {
-                        console.error('[VoiceEngine] Error awaiting pre-acquired stream:', e);
-                    }
+                    stream = await preStreamOrPromise;
                 } else {
                     stream = preStreamOrPromise;
                 }
-            }
-
-            if (stream) {
-                const audioTrack = stream.getAudioTracks()[0];
-                if (audioTrack) {
-                    track = await agoraRef.current.createCustomAudioTrack({
-                        mediaStreamTrack: audioTrack,
-                        encoderConfig: 'music_standard',
-                    });
-                    console.log('[VoiceEngine] Using pre-acquired stream (createCustomAudioTrack)');
+                if (stream && stream.active) {
+                    localStreamRef.current = stream;
+                    return stream;
                 }
             }
-
-            // Fallback: let Agora call getUserMedia itself
-            if (!track) {
-                track = await agoraRef.current.createMicrophoneAudioTrack({
-                    encoderConfig: 'music_standard',
-                });
-                console.log('[VoiceEngine] Using createMicrophoneAudioTrack (fallback)');
-            }
-
-            // Start muted, publish
-            await track.setMuted(true);
-            localAudioTrackRef.current = track;
-            await clientRef.current.publish([track]);
-            console.log('[VoiceEngine] Mic track published');
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            localStreamRef.current = stream;
+            (window as any).__wf_mic_stream = stream;
+            return stream;
         } catch (err: any) {
-            const code = (err?.code ?? err?.name ?? '').toLowerCase();
-            const msg = (err?.message ?? err?.toString() ?? '').toLowerCase();
-            const full = code + ' ' + msg;
-            if (full.includes('not_allowed') || full.includes('notallowed') || full.includes('permission') || full.includes('denied')) {
-                showToast('Mic blocked — tap the 🔒 in your browser bar and allow Microphone', '🎤', '#FF2D55');
-            } else if (full.includes('not found') || full.includes('notfound') || full.includes('no device') || full.includes('devicenotfound')) {
+            const msg = (err?.message ?? '').toLowerCase();
+            if (msg.includes('denied') || msg.includes('not allowed')) {
+                showToast('Mic blocked — allow microphone access in your browser', '🎤', '#FF2D55');
+            } else if (msg.includes('not found') || msg.includes('no device')) {
                 showToast('No microphone found', '🎤', '#FF6A00');
-            } else if (full.includes('not_readable') || full.includes('notreadable') || full.includes('in use')) {
-                showToast('Mic in use by another app — close it and try again', '🎤', '#FF6A00');
             } else {
-                showToast(`Mic error [${err?.code ?? err?.name ?? 'unknown'}]`, '🎤', '#FF6A00');
+                showToast('Microphone error — check browser permissions', '🎤', '#FF6A00');
             }
+            return null;
         }
     };
 
-    useEffect(() => {
-        const toggleMic = async () => {
-            if (!joinedRef.current || !clientRef.current) return;
+    // ─── Peer connection factory ─────────────────────────────────────────────
+    const createPeer = (remoteId: string): RTCPeerConnection => {
+        const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
-            if (isTalkingLocally) {
-                // Re-play remote tracks (handles Safari autoplay suspension on receive side)
-                remoteUsersRef.current.forEach((user) => {
-                    try { user.audioTrack?.play(); } catch (_) {}
+        // Add local audio tracks (muted until PTT press)
+        if (localStreamRef.current) {
+            localStreamRef.current.getAudioTracks().forEach(track => {
+                track.enabled = false; // always start muted
+                pc.addTrack(track, localStreamRef.current!);
+            });
+        }
+
+        // Play incoming audio
+        pc.ontrack = (event) => {
+            const stream = event.streams[0];
+            if (!stream) return;
+
+            let audio = audioElemsRef.current.get(remoteId);
+            if (!audio) {
+                audio = document.createElement('audio');
+                audio.autoplay = true;
+                audio.setAttribute('playsinline', '');
+                document.body.appendChild(audio);
+                audioElemsRef.current.set(remoteId, audio);
+            }
+            audio.srcObject = stream;
+            audio.play().catch(() => {
+                // Autoplay may be blocked — will resume on next user gesture
+            });
+        };
+
+        // Send ICE candidates via signaling channel
+        pc.onicecandidate = (event) => {
+            if (event.candidate && sigChannelRef.current) {
+                sigChannelRef.current.send({
+                    type: 'broadcast',
+                    event: 'ice',
+                    payload: {
+                        from: myIdRef.current,
+                        to: remoteId,
+                        candidate: event.candidate.toJSON(),
+                    },
                 });
-
-                if (!localAudioTrackRef.current) {
-                    await createMicTrack();
-                }
-
-                await localAudioTrackRef.current?.setMuted(false);
-                console.log('[VoiceEngine] Mic UNMUTED');
-            } else {
-                await localAudioTrackRef.current?.setMuted(true);
-                console.log('[VoiceEngine] Mic MUTED');
             }
         };
 
-        toggleMic().catch(err => console.error('[VoiceEngine] PTT error:', err));
+        pc.onconnectionstatechange = () => {
+            const state = pc.connectionState;
+            console.log(`[WebRTC] Peer ${remoteId}: ${state}`);
+            if (state === 'failed' || state === 'closed') {
+                cleanupPeer(remoteId);
+            }
+        };
+
+        peersRef.current.set(remoteId, pc);
+        return pc;
+    };
+
+    const cleanupPeer = (remoteId: string) => {
+        peersRef.current.get(remoteId)?.close();
+        peersRef.current.delete(remoteId);
+        const audio = audioElemsRef.current.get(remoteId);
+        if (audio) {
+            audio.srcObject = null;
+            audio.remove();
+            audioElemsRef.current.delete(remoteId);
+        }
+    };
+
+    // ─── Main effect: signaling channel lifecycle ────────────────────────────
+    useEffect(() => {
+        if (!convoyId || !myId) return;
+
+        setVoiceStatus('connecting');
+
+        // Acquire mic immediately so it's ready before any offer/answer
+        ensureMic().then((stream) => {
+            if (!stream) {
+                // Non-fatal: user can still receive audio; they just can't transmit
+                console.warn('[WebRTC] Mic not available on join; receive-only mode');
+            }
+
+            const sigChannel = supabase.channel(`rtc:${convoyId}`, {
+                config: { broadcast: { self: false, ack: false } },
+            });
+
+            sigChannelRef.current = sigChannel;
+
+            // ── Signaling handlers ───────────────────────────────────────────
+
+            // Existing peer announced they're here → we create an offer to them
+            sigChannel.on('broadcast', { event: 'join' }, async ({ payload }: any) => {
+                const peerId: string = payload?.id;
+                if (!peerId || peerId === myIdRef.current) return;
+                if (peersRef.current.has(peerId)) return; // already connected
+
+                const pc = createPeer(peerId);
+                try {
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    sigChannel.send({
+                        type: 'broadcast',
+                        event: 'offer',
+                        payload: { from: myIdRef.current, to: peerId, sdp: offer },
+                    });
+                } catch (e) {
+                    console.error('[WebRTC] offer creation failed:', e);
+                    cleanupPeer(peerId);
+                }
+            });
+
+            // We received an offer → create answer
+            sigChannel.on('broadcast', { event: 'offer' }, async ({ payload }: any) => {
+                if (payload?.to !== myIdRef.current) return;
+                const peerId: string = payload.from;
+
+                if (peersRef.current.has(peerId)) {
+                    peersRef.current.get(peerId)?.close();
+                    peersRef.current.delete(peerId);
+                }
+
+                const pc = createPeer(peerId);
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    sigChannel.send({
+                        type: 'broadcast',
+                        event: 'answer',
+                        payload: { from: myIdRef.current, to: peerId, sdp: answer },
+                    });
+                } catch (e) {
+                    console.error('[WebRTC] answer creation failed:', e);
+                    cleanupPeer(peerId);
+                }
+            });
+
+            // We received an answer to our offer
+            sigChannel.on('broadcast', { event: 'answer' }, async ({ payload }: any) => {
+                if (payload?.to !== myIdRef.current) return;
+                const pc = peersRef.current.get(payload.from);
+                if (!pc) return;
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+                } catch (e) {
+                    console.error('[WebRTC] setRemoteDescription (answer) failed:', e);
+                }
+            });
+
+            // ICE candidate from remote peer
+            sigChannel.on('broadcast', { event: 'ice' }, async ({ payload }: any) => {
+                if (payload?.to !== myIdRef.current) return;
+                const pc = peersRef.current.get(payload.from);
+                if (!pc) return;
+                try {
+                    await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+                } catch (e) {
+                    // Can happen if remote description not set yet; usually safe to ignore
+                }
+            });
+
+            // Peer left — clean up connection
+            sigChannel.on('broadcast', { event: 'leave' }, ({ payload }: any) => {
+                if (payload?.id) cleanupPeer(payload.id);
+            });
+
+            // ── Subscribe ────────────────────────────────────────────────────
+            sigChannel.subscribe((status: string) => {
+                if (status === 'SUBSCRIBED') {
+                    setVoiceStatus('connected');
+                    console.log('[WebRTC] Signaling channel subscribed — announcing presence');
+                    // Announce to all peers that we joined (they'll send us offers)
+                    sigChannel.send({
+                        type: 'broadcast',
+                        event: 'join',
+                        payload: { id: myIdRef.current },
+                    });
+                } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    console.error('[WebRTC] Signaling channel error:', status);
+                    setVoiceStatus('error');
+                    showToast('Voice connection failed — check your internet', '🎤', '#FF2D55');
+                }
+            });
+        });
+
+        // Cleanup on unmount / convoyId change
+        return () => {
+            // Announce departure so peers can clean up
+            if (sigChannelRef.current) {
+                try {
+                    sigChannelRef.current.send({
+                        type: 'broadcast',
+                        event: 'leave',
+                        payload: { id: myIdRef.current },
+                    });
+                } catch (_) {}
+                supabase.removeChannel(sigChannelRef.current);
+                sigChannelRef.current = null;
+            }
+
+            peersRef.current.forEach((_, id) => cleanupPeer(id));
+            peersRef.current.clear();
+
+            localStreamRef.current?.getTracks().forEach(t => t.stop());
+            localStreamRef.current = null;
+            delete (window as any).__wf_mic_stream;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [convoyId, myId]);
+
+    // ─── PTT: mute / unmute local tracks ────────────────────────────────────
+    useEffect(() => {
+        const toggleMic = async () => {
+            if (isTalkingLocally) {
+                // Resume any suspended audio contexts (Safari)
+                audioElemsRef.current.forEach(audio => {
+                    audio.play().catch(() => {});
+                });
+
+                // Ensure mic is acquired
+                const stream = await ensureMic();
+                if (!stream) return;
+
+                const tracks = stream.getAudioTracks();
+
+                // If we got a new stream but peers don't have its tracks yet, add them
+                peersRef.current.forEach(pc => {
+                    const senders = pc.getSenders().filter(s => s.track?.kind === 'audio');
+                    if (senders.length === 0) {
+                        tracks.forEach(track => pc.addTrack(track, stream));
+                    } else {
+                        // Re-use existing sender (no renegotiation needed for mute)
+                        senders.forEach(s => { if (s.track) s.track.enabled = true; });
+                    }
+                });
+
+                tracks.forEach(t => { t.enabled = true; });
+                console.log('[WebRTC] Mic UNMUTED');
+            } else {
+                localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = false; });
+                console.log('[WebRTC] Mic MUTED');
+            }
+        };
+
+        toggleMic().catch(err => console.error('[WebRTC] PTT error:', err));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isTalkingLocally]);
 
     return null;
