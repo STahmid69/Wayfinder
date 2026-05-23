@@ -367,7 +367,10 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
             setRealtimeStatus('connecting');
 
             const ch = supabase.channel(`convoy:${convoyId}`, {
-                config: { presence: { key: myId } },
+                config: {
+                    presence: { key: myId },
+                    broadcast: { self: true, ack: false },
+                },
             })
                 .on('presence', { event: 'sync' }, () => {
                     const state = ch.presenceState();
@@ -706,16 +709,13 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
             showToast('Chat is not connected yet', '⚠️', '#FF2D55');
             return false;
         }
-        const msg: Message = { id: genId(), userId: myId, userName: myName, content, createdAt: new Date().toISOString() };
-        // Optimistically add the message locally immediately
-        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+        // Use refs to avoid stale closure values (myId/myName may be empty string on first render)
+        const msg: Message = { id: genId(), userId: myIdRef.current, userName: myNameRef.current || 'Driver', content, createdAt: new Date().toISOString() };
         try {
             await channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
             return true;
         } catch (error) {
             console.warn('[Convoy] Failed to send chat message', error);
-            // Remove the optimistically added message on failure
-            setMessages(prev => prev.filter(m => m.id !== msg.id));
             showToast('Message failed to send', '⚠️', '#FF2D55');
             return false;
         }
@@ -732,28 +732,19 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
     // ─── Votes ───────────────────────────────────────────────────────────────
     const proposeVote = (title: string, optionTexts: string[]) => {
         if (!convoyId || !channelRef.current) return;
+        // Use refs to avoid stale closure values
         const vote: Vote = {
-            id: genId(), title, proposedById: myId, proposedByName: myName,
+            id: genId(), title, proposedById: myIdRef.current, proposedByName: myNameRef.current || 'Driver',
             options: optionTexts.map(t => ({ id: genId(), text: t, voterIds: [] })),
             status: 'OPEN',
         };
-        setVotes(prev => [vote, ...prev]);
         channelRef.current.send({ type: 'broadcast', event: 'vote_new', payload: vote });
     };
 
     const castVote = (voteId: string, optionId: string) => {
         if (!convoyId || !channelRef.current) return;
-        setVotes(prev => prev.map(v => {
-            if (v.id !== voteId) return v;
-            return {
-                ...v,
-                options: v.options.map(o => {
-                    const without = o.voterIds.filter(uid => uid !== myId);
-                    return o.id === optionId ? { ...o, voterIds: [...without, myId] } : { ...o, voterIds: without };
-                }),
-            };
-        }));
-        channelRef.current.send({ type: 'broadcast', event: 'vote_cast', payload: { voteId, optionId, userId: myId } });
+        const userId = myIdRef.current;
+        channelRef.current.send({ type: 'broadcast', event: 'vote_cast', payload: { voteId, optionId, userId } });
     };
 
     // ─── PTT ─────────────────────────────────────────────────────────────────
