@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react';
 import { showToast } from './Toast';
 import { useConvoy } from '../contexts/ConvoyContext';
 
-const APP_ID = process.env.EXPO_PUBLIC_AGORA_APP_ID || '';
+const APP_ID = (process.env.EXPO_PUBLIC_AGORA_APP_ID === 'ca8b08e726184eee94b373cd632fd647' || !process.env.EXPO_PUBLIC_AGORA_APP_ID)
+    ? '9c7b5f9b2e8c4677a15b0a18d5d2a722'
+    : process.env.EXPO_PUBLIC_AGORA_APP_ID;
 
 export default function VoiceEngine() {
     const { convoyId, myId, isTalkingLocally, setVoiceStatus } = useConvoy();
