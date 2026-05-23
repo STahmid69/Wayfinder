@@ -702,21 +702,20 @@ export function ConvoyProvider({ children }: { children: React.ReactNode }) {
 
     // ─── Chat ────────────────────────────────────────────────────────────────
     const sendMessage = async (content: string) => {
-        if (!convoyId || !channelRef.current || realtimeStatus !== 'connected') {
+        if (!convoyId || !channelRef.current) {
             showToast('Chat is not connected yet', '⚠️', '#FF2D55');
             return false;
         }
         const msg: Message = { id: genId(), userId: myId, userName: myName, content, createdAt: new Date().toISOString() };
+        // Optimistically add the message locally immediately
+        setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
         try {
-            const result = await channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
-            if (result !== 'ok') {
-                showToast('Message failed to send', '⚠️', '#FF2D55');
-                return false;
-            }
-            setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+            await channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
             return true;
         } catch (error) {
             console.warn('[Convoy] Failed to send chat message', error);
+            // Remove the optimistically added message on failure
+            setMessages(prev => prev.filter(m => m.id !== msg.id));
             showToast('Message failed to send', '⚠️', '#FF2D55');
             return false;
         }

@@ -2,20 +2,26 @@ import { useEffect, useRef } from 'react';
 import { createAgoraRtcEngine, ChannelProfileType, ClientRoleType } from '../lib/agora';
 import { useConvoy } from '../contexts/ConvoyContext';
 
-const AGORA_APP_ID = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_AGORA_APP_ID && process.env.EXPO_PUBLIC_AGORA_APP_ID !== 'ca8b08e726184eee94b373cd632fd647')
+const AGORA_APP_ID = (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_AGORA_APP_ID)
     ? process.env.EXPO_PUBLIC_AGORA_APP_ID
     : '9c7b5f9b2e8c4677a15b0a18d5d2a722';
 
-export default function VoiceEngine() {
-    const { convoyId, myId, isTalkingLocally } = useConvoy();
-    const engineRef = useRef<any>(null);
-    const currentChannelRef = useRef<string | null>(null);
+/**
+ * How long (ms) to stay in the Agora channel after voice activity stops.
+ * Keeps the channel warm for quick back-and-forth without burning minutes
+ * during long silent stretches.
+ */
+const IDLE_LEAVE_DELAY_MS = 30_000; // 30 seconds
 
-    // Initialize once on mount, tear down on unmount
+export default function VoiceEngine() {
+    const { convoyId, myId, isTalkingLocally, whoIsTalking } = useConvoy();
+    const engineRef = useRef<any>(null);
+    const inChannelRef = useRef(false);
+    const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // ─── One-time engine init ────────────────────────────────────────────────
     useEffect(() => {
-        if (!AGORA_APP_ID || !convoyId) {
-            return;
-        }
+        if (!AGORA_APP_ID || !convoyId) return;
 
         try {
             const engine = createAgoraRtcEngine();
@@ -27,117 +33,127 @@ export default function VoiceEngine() {
 
             // ─── DISCORD-QUALITY AUDIO CONFIGURATION ─────────────────────────
             // Audio Profile: 48kHz sample rate, stereo, 128kbps bitrate
-            // This is the highest quality Agora offers — same tier as Discord/Zoom HD
             try {
                 // AudioProfileType: 4 = MusicHighQualityStereo (48kHz, 128kbps, stereo)
                 // AudioScenarioType: 3 = GameStreaming (optimized for voice + low latency)
                 engine.setAudioProfile(4, 3);
             } catch (_) {
-                // Fallback: try enum-based approach
-                try {
-                    engine.setAudioProfile(3, 3); // MusicHighQuality mono fallback
-                } catch (__) {}
+                try { engine.setAudioProfile(3, 3); } catch (__) {}
             }
 
-            // ─── NOISE SUPPRESSION (AI-powered, like Discord Krisp) ───────────
+            // ─── NOISE SUPPRESSION (AI-powered) ──────────────────────────────
             try {
-                // Enable Agora AI noise suppression (aggressive mode)
-                // 0 = off, 1 = mild, 2 = aggressive  
                 engine.setParameters('{"che.audio.ains_mode": 2}');
-                // Enable stationary noise suppression
                 engine.setParameters('{"che.audio.ns.mode": 2}');
             } catch (_) {}
 
             // ─── ECHO CANCELLATION ───────────────────────────────────────────
             try {
-                // Full-band AEC for speakerphone usage in cars
                 engine.setParameters('{"che.audio.aec.splittingFilter": 1}');
-                // Mobile AEC optimization
                 engine.setParameters('{"che.audio.aec.mobile": 1}');
             } catch (_) {}
 
             // ─── AUTOMATIC GAIN CONTROL ──────────────────────────────────────
             try {
-                // Target level for AGC — keeps volume consistent between speakers
                 engine.setParameters('{"che.audio.agc.targetlevel": 3}');
-                // Compression gain
                 engine.setParameters('{"che.audio.agc.compgain": 12}');
             } catch (_) {}
 
             // ─── AUDIO ENCODING / CODEC ──────────────────────────────────────
             try {
-                // Use OPUS codec at highest bitrate (Discord also uses OPUS)
                 engine.setParameters('{"che.audio.opus.bitrate": 128000}');
-                // Complexity: 10 = highest quality encoding
                 engine.setParameters('{"che.audio.opus.complexity": 10}');
-                // Enable FEC for packet loss resilience
                 engine.setParameters('{"che.audio.opus.inbandfec": 1}');
-                // DTX off — keep audio stream consistent (no choppy cutoffs)
                 engine.setParameters('{"che.audio.opus.dtx": 0}');
             } catch (_) {}
 
             // ─── SIGNAL PROCESSING ───────────────────────────────────────────
             try {
-                // Enable high-pass filter to remove low-frequency rumble (road/wind noise)
                 engine.setParameters('{"che.audio.hp_filter": 1}');
-                // Disable automatic volume adjustment by OS (we handle it via AGC)
                 engine.setParameters('{"che.audio.input_sample_rate": 48000}');
             } catch (_) {}
 
             engine.enableAudio();
-            engine.muteLocalAudioStream(true); // always start muted until PTT pressed
+            engine.muteLocalAudioStream(true); // always start muted
 
-            // Route audio through speaker (not earpiece) on both platforms
             try {
                 engine.setDefaultAudioRouteToSpeakerphone(true);
                 engine.setEnableSpeakerphone(true);
             } catch (_) {}
 
             engineRef.current = engine;
-            console.log('[VoiceEngine] Initialized with Discord-quality audio profile');
+            console.log('[VoiceEngine] Engine initialized (not yet in channel — lazy join)');
         } catch (e) {
             console.warn('[VoiceEngine] init error:', e);
         }
 
         return () => {
+            clearTimeout(idleTimerRef.current ?? undefined);
             try {
-                engineRef.current?.leaveChannel();
+                if (inChannelRef.current) engineRef.current?.leaveChannel();
                 engineRef.current?.release();
             } catch (_) {}
             engineRef.current = null;
-            currentChannelRef.current = null;
+            inChannelRef.current = false;
         };
-    }, [convoyId]); // Re-init if convoy ID changes (rare but possible)
+    }, [convoyId]); // Re-init if convoy ID changes
 
-    // Join or switch Agora channel when convoyId changes
-    useEffect(() => {
-        if (!engineRef.current || !convoyId) return;
-
-        const agoraChannel = convoyId;
-        if (currentChannelRef.current === agoraChannel) return;
-
+    // ─── Lazy join helper ────────────────────────────────────────────────────
+    const ensureJoined = () => {
+        if (!engineRef.current || !convoyId || inChannelRef.current) return;
         try {
-            if (currentChannelRef.current) {
-                engineRef.current.leaveChannel();
-            }
-            engineRef.current.joinChannel('', agoraChannel, 0, {
+            engineRef.current.joinChannel('', convoyId, 0, {
                 clientRoleType: ClientRoleType.ClientRoleBroadcaster,
                 publishMicrophoneTrack: true,
                 autoSubscribeAudio: true,
             });
-            currentChannelRef.current = agoraChannel;
-            console.log('[VoiceEngine] Joined channel:', agoraChannel);
+            inChannelRef.current = true;
+            console.log('[VoiceEngine] Lazy-joined channel:', convoyId);
         } catch (e) {
             console.warn('[VoiceEngine] channel join error:', e);
         }
-    }, [convoyId]);
+    };
 
-    // Mute / unmute in response to PTT button press
+    const scheduleLeave = () => {
+        // Cancel any existing timer first
+        if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+
+        idleTimerRef.current = setTimeout(() => {
+            if (!engineRef.current || !inChannelRef.current) return;
+            try {
+                engineRef.current.leaveChannel();
+                inChannelRef.current = false;
+                console.log('[VoiceEngine] Left channel after idle timeout (saving minutes)');
+            } catch (_) {}
+        }, IDLE_LEAVE_DELAY_MS);
+    };
+
+    // ─── PTT: mute/unmute + lazy join on press ───────────────────────────────
     useEffect(() => {
-        try {
-            engineRef.current?.muteLocalAudioStream(!isTalkingLocally);
-        } catch (_) {}
+        if (isTalkingLocally) {
+            // Cancel any pending leave — stay in channel while transmitting
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+            // Join channel on first PTT press (lazy)
+            ensureJoined();
+            try { engineRef.current?.muteLocalAudioStream(false); } catch (_) {}
+        } else {
+            try { engineRef.current?.muteLocalAudioStream(true); } catch (_) {}
+            // Only schedule leave if nobody else is talking either
+            if (!whoIsTalking) scheduleLeave();
+        }
     }, [isTalkingLocally]);
+
+    // ─── Someone else started/stopped talking ───────────────────────────────
+    useEffect(() => {
+        if (whoIsTalking && whoIsTalking !== myId) {
+            // A remote peer is transmitting — join so we can hear them
+            if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+            ensureJoined();
+        } else if (!whoIsTalking && !isTalkingLocally) {
+            // Nobody is talking — start the idle leave countdown
+            scheduleLeave();
+        }
+    }, [whoIsTalking]);
 
     return null;
 }

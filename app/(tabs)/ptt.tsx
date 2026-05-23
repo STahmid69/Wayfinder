@@ -132,7 +132,7 @@ export default function PttScreen() {
   const { users, myId, convoyId, whoIsTalking, setTalking, myStatus, setMyStatus, voiceStatus } = useConvoy();
   const insets = useSafeAreaInsets();
   const [isTalking, setIsTalking] = useState(false);
-  const [isLatchMode, setIsLatchMode] = useState(false);
+  const [isLatchMode, setIsLatchMode] = useState(true); // Press-to-talk is default
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 4;
 
   const channels = [
@@ -323,7 +323,7 @@ export default function PttScreen() {
             }}
           >
             <MaterialCommunityIcons
-              name={isLatchMode ? "lock" : "gesture-tap-hold"}
+              name={isLatchMode ? "gesture-tap" : "gesture-tap-hold"}
               size={14}
               color={isLatchMode ? WF.amber : WF.textDim}
             />
@@ -334,7 +334,7 @@ export default function PttScreen() {
               letterSpacing: 1.2,
               textTransform: 'uppercase',
             }}>
-              Mode: {isLatchMode ? 'Latch (Tap)' : 'Hold to Talk'}
+              Mode: {isLatchMode ? 'Press to Talk' : 'Hold to Talk'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -383,7 +383,7 @@ export default function PttScreen() {
                 style={{ fontSize: 11, fontWeight: '800', letterSpacing: 3.5, marginTop: 8, color: isTalking ? '#0A0A0F' : WF.amber, textTransform: 'uppercase' }}
                 pointerEvents="none"
               >
-                {isTalking ? 'TRANSMITTING' : isLatchMode ? 'TAP TO TALK' : 'HOLD TO TALK'}
+                {isTalking ? 'TRANSMITTING' : isLatchMode ? 'PRESS TO TALK' : 'HOLD TO TALK'}
               </Text>
             </Pressable>
           </View>

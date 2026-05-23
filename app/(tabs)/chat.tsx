@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert, FlatList, KeyboardAvoidingView, Linking,
+  Alert, KeyboardAvoidingView, Linking,
   Platform, ScrollView, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -127,7 +127,7 @@ export default function SocialHubScreen() {
   const [text, setText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [showPropose, setShowPropose] = useState(false);
-  const flatListRef = useRef<FlatList>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   const topPad = Platform.OS === 'web' ? 24 : insets.top + 4;
   const isRealtimeConnected = realtimeStatus === 'connected';
 
@@ -142,8 +142,13 @@ export default function SocialHubScreen() {
       setText(content);
       return;
     }
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
   };
+
+  // Auto-scroll to bottom whenever messages change
+  useEffect(() => {
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 80);
+  }, [messages]);
 
   const TABS = ['CHAT', 'VOTES', 'MEMBERS'] as const;
 
@@ -181,32 +186,34 @@ export default function SocialHubScreen() {
       {/* CHAT */}
       {activeTab === 'CHAT' && (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={item => item.id}
-            onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          <ScrollView
+            ref={scrollViewRef}
+            style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 8, gap: 10 }}
-            ListHeaderComponent={
-              <View style={{ alignItems: 'center', paddingVertical: 8 }}>
-                <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.04)' }}>
-                  <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 2, color: WF.textMut, textTransform: 'uppercase' }}>TODAY</Text>
-                </View>
+          >
+            {/* Date header */}
+            <View style={{ alignItems: 'center', paddingVertical: 8 }}>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 2, color: WF.textMut, textTransform: 'uppercase' }}>TODAY</Text>
               </View>
-            }
-            ListEmptyComponent={
+            </View>
+
+            {/* Empty state */}
+            {messages.length === 0 && (
               <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }}>
                 <MaterialCommunityIcons name="message-outline" size={52} color="#FF6A00" />
                 <Text style={{ color: WF.text, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 2, fontSize: 13, marginTop: 16 }}>No messages yet</Text>
                 <Text style={{ color: WF.textMut, fontSize: 12, marginTop: 8, textAlign: 'center' }}>Be the first to say something 👋</Text>
               </View>
-            }
-            renderItem={({ item }) => {
+            )}
+
+            {/* Messages */}
+            {messages.map(item => {
               const isMe = item.userId === myId;
               const senderColor = users.find(u => u.id === item.userId)?.color ?? WF.textMut;
               return (
-                <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3 }}>
+                <View key={item.id} style={{ alignItems: isMe ? 'flex-end' : 'flex-start', gap: 3, marginBottom: 10 }}>
                   {!isMe && (
                     <Text style={{ color: senderColor, fontSize: 11, fontWeight: '700', letterSpacing: 0.3, marginLeft: 4 }}>
                       {item.userName}
@@ -232,18 +239,18 @@ export default function SocialHubScreen() {
                   )}
                 </View>
               );
-            }}
-          />
+            })}
+          </ScrollView>
           {/* Input */}
           <View style={{ padding: 12, paddingBottom: Platform.OS === 'web' ? 96 : insets.bottom + 78, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(20,20,24,0.9)', borderWidth: 1, borderColor: WF.line, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 }}>
-              <TextInput value={text} onChangeText={setText} placeholder={isRealtimeConnected ? 'Message convoy…' : 'Connecting to convoy…'} placeholderTextColor={WF.textDim} returnKeyType="send" onSubmitEditing={handleSend}
-                editable={isRealtimeConnected && !isSending}
+              <TextInput value={text} onChangeText={setText} placeholder='Message convoy…' placeholderTextColor={WF.textDim} returnKeyType="send" onSubmitEditing={handleSend}
+                editable={!isSending}
                 style={{ flex: 1, color: WF.text, fontSize: 13 }} />
             </View>
-            <TouchableOpacity onPress={handleSend} disabled={!text.trim() || isSending || !isRealtimeConnected}
-              style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: text.trim() && !isSending && isRealtimeConnected ? WF.amber : 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', shadowColor: WF.amber, shadowOpacity: text.trim() && !isSending && isRealtimeConnected ? 0.4 : 0, shadowRadius: 10, elevation: 4 }}>
-              <MaterialIcons name="arrow-upward" size={20} color={text.trim() && !isSending && isRealtimeConnected ? '#0A0A0F' : WF.textDim} />
+            <TouchableOpacity onPress={handleSend} disabled={!text.trim() || isSending}
+              style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: text.trim() && !isSending ? WF.amber : 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', shadowColor: WF.amber, shadowOpacity: text.trim() && !isSending ? 0.4 : 0, shadowRadius: 10, elevation: 4 }}>
+              <MaterialIcons name="arrow-upward" size={20} color={text.trim() && !isSending ? '#0A0A0F' : WF.textDim} />
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
